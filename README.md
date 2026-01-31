@@ -1,30 +1,32 @@
+> 🌐 [한국어](docs/ko/README.md)
+
 # git-volume
 
-> **"Git에는 코드만, 환경은 볼륨으로."**
+> **"Keep code in Git, mount your environment as volumes."**
 
-`git-volume`은 Git 워크트리 간에 환경 파일(`.env`, 시크릿 등)을 중앙에서 관리하고 동적으로 마운트해주는 CLI 도구입니다.
+`git-volume` is a CLI tool that centrally manages environment files (`.env`, secrets, etc.) across Git worktrees and dynamically mounts them.
 
-## ✨ 주요 기능
+## ✨ Key Features
 
-- **볼륨 마운트**: 심볼릭 링크 또는 파일 복사 방식 지원
-- **설정 상속**: 자식 워크트리가 부모의 설정을 자동 상속
-- **안전한 정리**: 사용자가 수정한 파일은 삭제하지 않음
-- **AI 에이전트 최적화**: 한 줄 명령으로 워크트리 생성 + 환경 구성
+- **Volume Mounting**: Supports symbolic links or file copy modes
+- **Configuration Inheritance**: Child worktrees automatically inherit parent settings
+- **Safe Cleanup**: Modified files are preserved during unsync
+- **AI Agent Optimized**: Create worktree + configure environment with a single command
 
-## 📦 설치
+## 📦 Installation
 
 ```bash
 go install github.com/laggu/git-volume@latest
 ```
 
-## 🚀 빠른 시작
+## 🚀 Quick Start
 
-**1. 초기화**
+**1. Initialize**
 ```bash
 git volume init
 ```
 
-**2. git-volume.yaml 작성**
+**2. Create git-volume.yaml**
 ```yaml
 volumes:
   - ".env.shared:.env"
@@ -32,68 +34,68 @@ volumes:
     mode: "copy"
 ```
 
-**3. 볼륨 마운트**
+**3. Mount Volumes**
 ```bash
 git volume sync
 ```
 
-**4. 상태 확인**
+**4. Check Status**
 ```bash
 git volume list
 ```
 
-## 📖 명령어
+## 📖 Commands
 
-| 명령어 | 설명 |
-|--------|------|
-| `git volume init` | 글로벌 디렉토리 생성 및 샘플 설정 파일 생성 |
-| `git volume sync` | 설정에 따라 볼륨을 현재 워크트리에 마운트 |
-| `git volume unsync` | 마운트된 볼륨 제거 (수정된 파일은 보존) |
-| `git volume list` | 현재 볼륨 상태 표시 |
-| `git volume worktree add <path> <branch>` | 워크트리 생성 + 자동 sync |
+| Command | Description |
+|---------|-------------|
+| `git volume init` | Create global directory and sample configuration file |
+| `git volume sync` | Mount volumes to current worktree based on configuration |
+| `git volume unsync` | Remove mounted volumes (modified files are preserved) |
+| `git volume list` | Display current volume status |
+| `git volume worktree add <path> <branch>` | Create worktree + automatic sync |
 
-## ⚙️ 설정 파일 (`git-volume.yaml`)
+## ⚙️ Configuration File (`git-volume.yaml`)
 
 ```yaml
 volumes:
-  # 단순 형식 (기본: 심볼릭 링크)
+  # Simple format (default: symbolic link)
   - ".env.shared:.env"
 
-  # 옵션이 필요할 때
+  # With options
   - mount: "secrets/prod.key:config/prod.key"
-    mode: "copy"   # link (기본) 또는 copy
-    force: true    # 존재 시 덮어쓰기
+    mode: "copy"   # link (default) or copy
+    force: true    # overwrite if exists
 ```
 
-### 모드 비교
+### Mode Comparison
 
-| 모드 | 설명 | 용도 |
-|------|------|------|
-| `link` | 심볼릭 링크 생성 | 로컬 개발 (원본 수정 시 즉시 반영) |
-| `copy` | 파일 복사 | Docker 빌드 (심볼릭 링크 미지원 환경) |
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `link` | Create symbolic link | Local development (changes reflect immediately) |
+| `copy` | Copy file | Docker builds (environments without symlink support) |
 
-## 🔄 워크트리 상속
+## 🔄 Worktree Inheritance
 
-자식 워크트리에 `git-volume.yaml`이 없으면 부모(메인) 워크트리의 설정을 자동으로 사용합니다.
+If a child worktree doesn't have `git-volume.yaml`, it automatically uses the parent (main) worktree's configuration.
 
 ```bash
-# 메인 워크트리에만 설정 존재
+# Configuration exists only in main worktree
 main-repo/
 ├── .git/             # git common dir
-├── git-volume.yaml   # 설정 파일
-├── .env.shared       # 소스 파일
+├── git-volume.yaml   # configuration file
+├── .env.shared       # source file
 └── ...
 
-# 자식 워크트리에서 sync 실행 시 부모 설정 사용
+# Running sync in child worktree uses parent's config
 cd ../feature-branch
-git volume sync  # 부모의 git-volume.yaml 사용
+git volume sync  # uses parent's git-volume.yaml
 ```
 
-## 🛡️ 안전 장치
+## 🛡️ Safety Features
 
-- **Unsync 시 변경 감지**: Copy 모드로 복사된 파일이 수정되었으면 삭제하지 않고 보존
-- **멱등성**: `sync`를 여러 번 실행해도 안전
+- **Change Detection on Unsync**: Files copied in copy mode are preserved if modified
+- **Idempotent**: Running `sync` multiple times is safe
 
-## 📄 라이선스
+## 📄 License
 
-GNU GENERAL PUBLIC LICENSE
+[GNU GENERAL PUBLIC LICENSE](https://www.gnu.org/licenses/gpl-3.0.html)
