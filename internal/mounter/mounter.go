@@ -113,7 +113,7 @@ func (m *Mounter) Unsync(volumes []config.Volume, opts UnsyncOptions) error {
 				continue
 			}
 			shouldRemove = match
-			} else {
+		} else {
 			// Link Mode: Check Symlink Target
 			if info.Mode()&os.ModeSymlink != 0 {
 				linkTarget, err := os.Readlink(dstPath)

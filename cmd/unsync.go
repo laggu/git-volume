@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
 // unsyncCmd represents the unsync command
 var unsyncCmd = &cobra.Command{
 	Use:   "unsync",
