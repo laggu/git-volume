@@ -9,6 +9,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const SampleConfig = `volumes:
+  # Example: mount a shared env file
+  # - ".env.shared:.env"
+  #
+  # Example: copy a secret (required for Docker builds)
+  # - mount: "secrets/prod.key:config/prod.key"
+  #   mode: "copy"
+`
+
 // Constants
 const (
 	ConfigFileName = "git-volume.yaml"

@@ -21,9 +21,9 @@ var rootCmd = &cobra.Command{
 	Use:   "git-volume",
 	Short: "Manage environment files across Git worktrees",
 	Long: `git-volume manages environment files (.env, secrets, etc.) across Git worktrees
-by dynamically mounting them using a volume.yaml manifest.
+by dynamically mounting them using a git-volume.yaml manifest.
 
-"Git에는 코드만, 환경은 볼륨으로."`,
+"Keep code in Git, mount environments as volumes."`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

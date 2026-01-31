@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/laggu/git-volume/internal/config"
+	"github.com/laggu/git-volume/internal/finder"
 	"github.com/spf13/cobra"
 )
 
@@ -34,22 +35,18 @@ git-volume.yaml configuration file in the current directory.`,
 			fmt.Printf("✓ Global directory initialized: %s\n", globalDir)
 		}
 
-		// 2. Create Sample Config if not exists
+		// 2. Create Sample Config if not exists (at git root)
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		configPath := filepath.Join(cwd, config.ConfigFileName)
+		gitRoot, err := finder.FindGitWorktreeRoot(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to find git repository root: %w", err)
+		}
+		configPath := filepath.Join(gitRoot, config.ConfigFileName)
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			sampleConfig := `volumes:
-  # Example: mount a shared env file
-  # - ".env.shared:.env"
-  #
-  # Example: copy a secret (required for Docker builds)
-  # - mount: "secrets/prod.key:config/prod.key"
-  #   mode: "copy"
-`
-			if err := os.WriteFile(configPath, []byte(sampleConfig), config.DefaultFilePerm); err != nil {
+			if err := os.WriteFile(configPath, []byte(config.SampleConfig), config.DefaultFilePerm); err != nil {
 				return fmt.Errorf("failed to create sample config: %w", err)
 			}
 			if !quiet {

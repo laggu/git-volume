@@ -29,7 +29,7 @@ func FindContext(configPath string) (*Context, error) {
 	}
 
 	// 1. Find the root of the current git worktree
-	worktreeRoot, err := findGitWorktreeRoot(cwd)
+	worktreeRoot, err := FindGitWorktreeRoot(cwd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find git worktree root: %w", err)
 	}
@@ -94,7 +94,8 @@ func FindContext(configPath string) (*Context, error) {
 	return nil, fmt.Errorf("%s not found in current worktree or main worktree", config.ConfigFileName)
 }
 
-func findGitWorktreeRoot(startDir string) (string, error) {
+// FindGitWorktreeRoot returns the root directory of the current git worktree.
+func FindGitWorktreeRoot(startDir string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = startDir
 	out, err := cmd.Output()
