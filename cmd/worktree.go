@@ -38,13 +38,20 @@ Examples:
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Find the path argument (first non-flag argument)
+		// Find the path argument (first non-flag argument, handling flags that take values)
 		var path string
-		for _, arg := range args {
-			if !strings.HasPrefix(arg, "-") {
-				path = arg
-				break
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			if strings.HasPrefix(arg, "-") {
+				// Handle flags that take an argument value
+				if arg == "-b" || arg == "-B" || arg == "--track" {
+					i++ // Skip the next argument (flag's value)
+				}
+				continue
 			}
+			// First non-flag argument is the path
+			path = arg
+			break
 		}
 
 		if path == "" {

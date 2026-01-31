@@ -160,8 +160,9 @@ func validatePath(path string) error {
 		return fmt.Errorf("path cannot be current or parent directory: %s", path)
 	}
 
-	// Block .git directory and its contents
-	if cleanPath == ".git" || strings.HasPrefix(cleanPath, ".git/") || strings.HasPrefix(cleanPath, ".git\\") {
+	// Block .git directory and its contents (case-insensitive for Windows/macOS)
+	lowerPath := strings.ToLower(cleanPath)
+	if lowerPath == ".git" || strings.HasPrefix(lowerPath, ".git/") || strings.HasPrefix(lowerPath, ".git\\") {
 		return fmt.Errorf("path cannot be inside .git directory: %s", path)
 	}
 
