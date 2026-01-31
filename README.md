@@ -98,4 +98,4 @@ git volume sync  # uses parent's git-volume.yaml
 
 ## 📄 License
 
-GNU GENERAL PUBLIC LICENSE
+[GNU GENERAL PUBLIC LICENSE](https://www.gnu.org/licenses/gpl-3.0.html)
