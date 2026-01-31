@@ -80,7 +80,7 @@ func TestFindContext_LocalConfig(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Find context
-	ctx, err := FindContext("")
+	ctx, err := FindContext("", false)
 	if err != nil {
 		t.Fatalf("FindContext failed: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestFindContext_CustomPath(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Find context with custom path
-	ctx, err := FindContext(customConfigPath)
+	ctx, err := FindContext(customConfigPath, false)
 	if err != nil {
 		t.Fatalf("FindContext with custom path failed: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestFindContext_NoConfig(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Find context should fail
-	_, err := FindContext("")
+	_, err := FindContext("", false)
 	if err == nil {
 		t.Error("expected error when no config file exists")
 	}
@@ -174,7 +174,7 @@ func TestFindContext_RelativeCustomPath(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Find context with relative path
-	ctx, err := FindContext("my-config.yaml")
+	ctx, err := FindContext("my-config.yaml", false)
 	if err != nil {
 		t.Fatalf("FindContext with relative path failed: %v", err)
 	}

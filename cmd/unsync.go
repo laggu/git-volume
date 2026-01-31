@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var unsyncDryRun bool
 
 // unsyncCmd represents the unsync command
 var unsyncCmd = &cobra.Command{
@@ -25,7 +24,7 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1. Find Context
-		ctx, err := finder.FindContext(cfgFile)
+		ctx, err := finder.FindContext(cfgFile, quiet)
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
@@ -37,7 +36,7 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 		// 2. Execute Unsync
 		mnt := mounter.New(ctx.SourceDir, ctx.TargetDir)
 		opts := mounter.UnsyncOptions{
-			DryRun:  unsyncDryRun,
+			DryRun:  dryRun,
 			Verbose: verbose,
 			Quiet:   quiet,
 		}
@@ -45,7 +44,7 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 			return err
 		}
 
-		if !quiet && !unsyncDryRun {
+		if !quiet && !dryRun {
 			fmt.Println("✓ Unsync complete")
 		}
 		return nil
@@ -54,5 +53,5 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 
 func init() {
 	rootCmd.AddCommand(unsyncCmd)
-	unsyncCmd.Flags().BoolVar(&unsyncDryRun, "dry-run", false, "show what would be done without making changes")
+	unsyncCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
 }

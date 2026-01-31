@@ -29,7 +29,7 @@ it looks for it in the main Git worktree (inheritance).`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1. Find Context (Config + Dirs)
-		ctx, err := finder.FindContext(cfgFile)
+		ctx, err := finder.FindContext(cfgFile, quiet)
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}

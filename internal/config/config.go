@@ -27,7 +27,6 @@ const (
 	// File permission constants
 	DefaultDirPerm  os.FileMode = 0755
 	DefaultFilePerm os.FileMode = 0644
-	SecretFilePerm  os.FileMode = 0600
 )
 
 // Config represents the top-level structure of git-volume.yaml
@@ -176,7 +175,7 @@ func validatePath(path string) error {
 }
 
 // LoadConfig reads and parses the configuration file
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string, quiet bool) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -188,7 +187,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	// Warn if no volumes defined
-	if len(cfg.Volumes) == 0 {
+	if len(cfg.Volumes) == 0 && !quiet {
 		fmt.Fprintf(os.Stderr, "⚠️  Warning: no volumes defined in %s\n", path)
 	}
 

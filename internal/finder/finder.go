@@ -22,7 +22,7 @@ type Context struct {
 // Otherwise, it follows the inheritance logic:
 // 1. Check current worktree root.
 // 2. If not found, check main worktree (git-common-dir).
-func FindContext(configPath string) (*Context, error) {
+func FindContext(configPath string, quiet bool) (*Context, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current working directory: %w", err)
@@ -40,7 +40,7 @@ func FindContext(configPath string) (*Context, error) {
 		if !filepath.IsAbs(configPath) {
 			absConfigPath = filepath.Join(cwd, configPath)
 		}
-		cfg, err := config.LoadConfig(absConfigPath)
+		cfg, err := config.LoadConfig(absConfigPath, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -54,7 +54,7 @@ func FindContext(configPath string) (*Context, error) {
 	// 2. Check for local override
 	localConfigPath := filepath.Join(worktreeRoot, config.ConfigFileName)
 	if _, err := os.Stat(localConfigPath); err == nil {
-		cfg, err := config.LoadConfig(localConfigPath)
+		cfg, err := config.LoadConfig(localConfigPath, quiet)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func FindContext(configPath string) (*Context, error) {
 	if mainWorktreeRoot != "" && mainWorktreeRoot != worktreeRoot {
 		mainConfigPath := filepath.Join(mainWorktreeRoot, config.ConfigFileName)
 		if _, err := os.Stat(mainConfigPath); err == nil {
-			cfg, err := config.LoadConfig(mainConfigPath)
+			cfg, err := config.LoadConfig(mainConfigPath, quiet)
 			if err != nil {
 				return nil, err
 			}

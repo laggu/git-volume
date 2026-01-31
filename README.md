@@ -19,12 +19,12 @@ go install github.com/laggu/git-volume@latest
 
 ## 🚀 빠른 시작
 
-# 1. 초기화
+**1. 초기화**
 ```bash
 git volume init
 ```
 
-# 2. git-volume.yaml 작성
+**2. git-volume.yaml 작성**
 ```yaml
 volumes:
   - ".env.shared:.env"
@@ -32,12 +32,12 @@ volumes:
     mode: "copy"
 ```
 
-# 3. 볼륨 마운트
+**3. 볼륨 마운트**
 ```bash
 git volume sync
 ```
 
-# 4. 상태 확인
+**4. 상태 확인**
 ```bash
 git volume list
 ```

@@ -21,7 +21,7 @@ var listCmd = &cobra.Command{
 	Short:        "Lists all volumes and their status",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := finder.FindContext(cfgFile)
+		ctx, err := finder.FindContext(cfgFile, quiet)
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
@@ -66,6 +66,10 @@ func checkStatus(v config.Volume, srcBase, targetBase string) string {
 			link, err := os.Readlink(targetPath)
 			if err != nil {
 				return "ERROR (readlink)"
+			}
+			// Resolve relative symlink based on symlink's parent directory
+			if !filepath.IsAbs(link) {
+				link = filepath.Join(filepath.Dir(targetPath), link)
 			}
 			if mounter.PathsEqual(link, srcPath) {
 				return "OK (Linked)"

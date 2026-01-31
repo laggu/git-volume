@@ -113,12 +113,18 @@ func (m *Mounter) Unsync(volumes []config.Volume, opts UnsyncOptions) error {
 				continue
 			}
 			shouldRemove = match
-		} else {
+			} else {
 			// Link Mode: Check Symlink Target
 			if info.Mode()&os.ModeSymlink != 0 {
 				linkTarget, err := os.Readlink(dstPath)
-				if err == nil && PathsEqual(linkTarget, srcPath) {
-					shouldRemove = true
+				if err == nil {
+					// Resolve relative symlink based on symlink's parent directory
+					if !filepath.IsAbs(linkTarget) {
+						linkTarget = filepath.Join(filepath.Dir(dstPath), linkTarget)
+					}
+					if PathsEqual(linkTarget, srcPath) {
+						shouldRemove = true
+					}
 				}
 			}
 		}
@@ -173,8 +179,14 @@ func (m *Mounter) syncLink(src, dst string, force bool, relativeLink bool) error
 	if info, err := os.Lstat(dst); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			currentTarget, err := os.Readlink(dst)
-			if err == nil && PathsEqual(currentTarget, src) {
-				return nil // Already linked correctly
+			if err == nil {
+				// Resolve relative symlink based on symlink's parent directory
+				if !filepath.IsAbs(currentTarget) {
+					currentTarget = filepath.Join(filepath.Dir(dst), currentTarget)
+				}
+				if PathsEqual(currentTarget, src) {
+					return nil // Already linked correctly
+				}
 			}
 		}
 		if !force {

@@ -120,7 +120,7 @@ volumes:
 			tmpFile.Close()
 
 			// Run LoadConfig
-			cfg, err := LoadConfig(tmpFile.Name())
+			cfg, err := LoadConfig(tmpFile.Name(), false)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LoadConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
