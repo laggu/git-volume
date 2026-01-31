@@ -44,9 +44,13 @@ func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 		srcPath := filepath.Join(m.SourceBase, vol.Source)
 		dstPath := filepath.Join(m.TargetBase, vol.Target)
 
-		// Check if source exists
-		if _, err := os.Stat(srcPath); err != nil {
+		// Check if source exists and is not a symlink (security: prevent reading sensitive files outside repo)
+		srcInfo, err := os.Lstat(srcPath)
+		if err != nil {
 			return fmt.Errorf("source file not found: %s", srcPath)
+		}
+		if srcInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", srcPath)
 		}
 
 		if opts.DryRun {

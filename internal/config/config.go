@@ -129,24 +129,40 @@ func (v *Volume) parseMount(mount string) error {
 // findMountSeparator finds the colon that separates source and target
 // It skips Windows drive letter colons (e.g., C: in C:\path)
 func findMountSeparator(mount string) int {
-	for i := 0; i < len(mount); i++ {
-		if mount[i] == ':' {
-			// On Windows, skip drive letter colon (e.g., "C:" at position 1)
-			if runtime.GOOS == "windows" && i == 1 && len(mount) > 2 {
-				// This is likely a drive letter, continue looking
-				continue
+	if runtime.GOOS == "windows" {
+		if len(mount) > 1 && mount[1] == ':' {
+			isDrive := (mount[0] >= 'a' && mount[0] <= 'z') || (mount[0] >= 'A' && mount[0] <= 'Z')
+			if isDrive {
+				// It's a drive letter. Look for the next colon after it.
+				nextColon := strings.Index(mount[2:], ":")
+				if nextColon != -1 {
+					return 2 + nextColon
+				}
+				// No other colon found, so there is no source:target separator.
+				return -1
 			}
-			return i
 		}
 	}
-	return -1
+	return strings.Index(mount, ":")
 }
 
-// validatePath checks for path traversal attacks
+// validatePath checks for path traversal attacks and dangerous paths
 func validatePath(path string) error {
 	// Check for empty path
 	if path == "" {
 		return fmt.Errorf("path cannot be empty")
+	}
+
+	// Check for dangerous paths that could cause data loss
+	// Block "." (current directory) and ".git" directory
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath == "." || cleanPath == ".." {
+		return fmt.Errorf("path cannot be current or parent directory: %s", path)
+	}
+
+	// Block .git directory and its contents
+	if cleanPath == ".git" || strings.HasPrefix(cleanPath, ".git/") || strings.HasPrefix(cleanPath, ".git\\") {
+		return fmt.Errorf("path cannot be inside .git directory: %s", path)
 	}
 
 	// Check for absolute paths (should be relative)

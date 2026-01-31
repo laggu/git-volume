@@ -15,34 +15,48 @@ import (
 
 // worktreeCmd represents the worktree command
 var worktreeCmd = &cobra.Command{
-	Use:   "worktree [add] [path] [branch]",
+	Use:   "worktree",
 	Short: "Wrapper for git worktree that automatically syncs volumes",
+	Long: `Wrapper for git worktree commands. Currently supports 'add' subcommand.
+After creating the worktree, it automatically runs 'git volume sync' inside it.`,
+}
+
+// worktreeAddCmd represents the worktree add subcommand
+var worktreeAddCmd = &cobra.Command{
+	Use:   "add <path> [<commit-ish>] [-- <git-worktree-options>...]",
+	Short: "Create a worktree and sync volumes",
 	Long: `Creates a new git worktree and immediately runs 'git volume sync' inside it.
-Example: git volume worktree add ../feature-branch feature-branch`,
-	SilenceUsage: true,
+
+All arguments after 'add' are passed directly to 'git worktree add', allowing
+full flexibility with git worktree options like -b, --force, etc.
+
+Examples:
+  git volume worktree add ../feature-branch feature-branch
+  git volume worktree add -b new-branch ../new-branch main
+  git volume worktree add --detach ../detached-worktree HEAD~3`,
+	SilenceUsage:          true,
+	DisableFlagsInUseLine: true,
+	Args:                  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Verify args
-		if len(args) < 3 || args[0] != "add" {
-			return fmt.Errorf("usage: git volume worktree add <path> <branch>")
+		// Find the path argument (first non-flag argument)
+		var path string
+		for _, arg := range args {
+			if !strings.HasPrefix(arg, "-") {
+				path = arg
+				break
+			}
 		}
 
-		path := args[1]
-		branch := args[2]
-
-		// Validate arguments to prevent option injection
-		if strings.HasPrefix(path, "-") {
-			return fmt.Errorf("invalid path: cannot start with '-'")
-		}
-		if strings.HasPrefix(branch, "-") {
-			return fmt.Errorf("invalid branch: cannot start with '-'")
-		}
-		if path == "" || branch == "" {
-			return fmt.Errorf("path and branch cannot be empty")
+		if path == "" {
+			return fmt.Errorf("path argument is required")
 		}
 
-		// 1. Run git worktree add
-		fmt.Printf("🔨 Creating worktree '%s' at '%s'...\n", branch, path)
-		gitCmd := exec.Command("git", "worktree", "add", path, branch)
+		// 1. Run git worktree add with all provided arguments
+		if !quiet {
+			fmt.Printf("🔨 Creating worktree at '%s'...\n", path)
+		}
+		gitArgs := append([]string{"worktree", "add"}, args...)
+		gitCmd := exec.Command("git", gitArgs...)
 		gitCmd.Stdout = os.Stdout
 		gitCmd.Stderr = os.Stderr
 		if err := gitCmd.Run(); err != nil {
@@ -61,7 +75,9 @@ Example: git volume worktree add ../feature-branch feature-branch`,
 			return fmt.Errorf("failed to determine executable path: %w", err)
 		}
 
-		fmt.Printf("\n🔄 Syncing volumes in %s...\n", absPath)
+		if !quiet {
+			fmt.Printf("\n🔄 Syncing volumes in %s...\n", absPath)
+		}
 		syncCmd := exec.Command(selfExe, "sync")
 		syncCmd.Dir = absPath
 		syncCmd.Stdout = os.Stdout
@@ -72,11 +88,14 @@ Example: git volume worktree add ../feature-branch feature-branch`,
 			return fmt.Errorf("worktree created but volume sync failed")
 		}
 
-		fmt.Println("✨ Worktree ready with volumes mounted!")
+		if !quiet {
+			fmt.Println("✨ Worktree ready with volumes mounted!")
+		}
 		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(worktreeCmd)
+	worktreeCmd.AddCommand(worktreeAddCmd)
 }
