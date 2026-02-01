@@ -21,22 +21,39 @@ var listCmd = &cobra.Command{
 	Short:        "Lists all volumes and their status",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := finder.FindContext(cfgFile, quiet)
+		ctx, err := finder.FindContext(finder.FindContextOptions{
+			ConfigPath:        cfgFile,
+			Quiet:             quiet,
+			GlobalDirOverride: globalDir,
+		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
 
 		if !quiet {
 			fmt.Printf("📂 Source Config: %s\n", filepath.Join(ctx.SourceDir, config.ConfigFileName))
-			fmt.Printf("🎯 Target Root:   %s\n\n", ctx.TargetDir)
+			fmt.Printf("🎯 Target Root:   %s\n", ctx.TargetDir)
+			if config.HasGlobalVolumes(ctx.Config.Volumes) {
+				fmt.Printf("🌐 Global Dir:    %s\n", ctx.GlobalDir)
+			}
+			fmt.Println()
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "SOURCE\tTARGET\tMODE\tSTATUS")
 
 		for _, v := range ctx.Config.Volumes {
-			status := checkStatus(v, ctx.SourceDir, ctx.TargetDir)
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", v.Source, v.Target, v.Mode, status)
+			var srcBase string
+			var displaySource string
+			if v.IsGlobal {
+				srcBase = ctx.GlobalDir
+				displaySource = "@global/" + v.Source
+			} else {
+				srcBase = ctx.SourceDir
+				displaySource = v.Source
+			}
+			status := checkStatus(v, srcBase, ctx.TargetDir)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", displaySource, v.Target, v.Mode, status)
 		}
 		w.Flush()
 		return nil
