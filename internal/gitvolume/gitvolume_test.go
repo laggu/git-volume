@@ -1,12 +1,10 @@
-package mounter
+package gitvolume
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/laggu/git-volume/internal/config"
 )
 
 func setupTestEnv(t *testing.T) (sourceDir, targetDir string, cleanup func()) {
@@ -56,16 +54,30 @@ func setupTestEnvWithGlobal(t *testing.T) (sourceDir, targetDir, globalDir strin
 	return
 }
 
-func TestMounter_Sync_Link(t *testing.T) {
+// createTestGitVolume creates a GitVolume for testing with pre-configured workspace
+func createTestGitVolume(sourceDir, targetDir, globalDir string, volumes []Volume) *GitVolume {
+	return &GitVolume{
+		ws: &Workspace{
+			sourceDir: sourceDir,
+			targetDir: targetDir,
+			globalDir: globalDir,
+			volumes:   volumes,
+		},
+		verbose: false,
+		quiet:   true,
+	}
+}
+
+func TestGitVolume_Sync_Link(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -81,16 +93,16 @@ func TestMounter_Sync_Link(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_Copy(t *testing.T) {
+func TestGitVolume_Sync_Copy(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source2.txt", Target: "copy2.txt", Mode: config.ModeCopy},
+	volumes := []Volume{
+		{Source: "source2.txt", Target: "copy2.txt", Mode: ModeCopy},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -105,21 +117,21 @@ func TestMounter_Sync_Copy(t *testing.T) {
 	}
 }
 
-func TestMounter_Unsync(t *testing.T) {
+func TestGitVolume_Unsync(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
-		{Source: "source2.txt", Target: "copy2.txt", Mode: config.ModeCopy},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
+		{Source: "source2.txt", Target: "copy2.txt", Mode: ModeCopy},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	// Sync first
-	m.Sync(volumes, SyncOptions{})
+	gv.Sync(SyncOptions{})
 
 	// Unsync
-	if err := m.Unsync(volumes, UnsyncOptions{Quiet: true}); err != nil {
+	if err := gv.Unsync(UnsyncOptions{}); err != nil {
 		t.Fatalf("Unsync failed: %v", err)
 	}
 
@@ -131,18 +143,18 @@ func TestMounter_Unsync(t *testing.T) {
 	}
 }
 
-func TestMounter_Unsync_SafetyCheck(t *testing.T) {
+func TestGitVolume_Unsync_SafetyCheck(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
-		{Source: "source2.txt", Target: "copy2.txt", Mode: config.ModeCopy},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
+		{Source: "source2.txt", Target: "copy2.txt", Mode: ModeCopy},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	// Sync
-	m.Sync(volumes, SyncOptions{})
+	gv.Sync(SyncOptions{})
 
 	// Modify Copy Target
 	copyPath := filepath.Join(targetDir, "copy2.txt")
@@ -154,7 +166,7 @@ func TestMounter_Unsync_SafetyCheck(t *testing.T) {
 	os.WriteFile(linkPath, []byte("NOT A LINK"), 0644)
 
 	// Unsync
-	m.Unsync(volumes, UnsyncOptions{Quiet: true})
+	gv.Unsync(UnsyncOptions{})
 
 	// Verify Copy was Preserved (Skipped)
 	data, _ := os.ReadFile(copyPath)
@@ -169,28 +181,30 @@ func TestMounter_Unsync_SafetyCheck(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_Force(t *testing.T) {
+func TestGitVolume_Sync_Force(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
-
-	m := New(sourceDir, targetDir, "")
 
 	// Create existing file at target
 	targetPath := filepath.Join(targetDir, "link1.txt")
 	os.WriteFile(targetPath, []byte("existing content"), 0644)
 
 	// Try sync without force - should fail
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink, Force: false},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink, Force: false},
 	}
-	err := m.Sync(volumes, SyncOptions{})
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	err := gv.Sync(SyncOptions{})
 	if err == nil {
 		t.Error("expected error when target exists and force is false")
 	}
 
 	// Sync with force - should succeed
 	volumes[0].Force = true
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	gv = createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync with force failed: %v", err)
 	}
 
@@ -201,11 +215,9 @@ func TestMounter_Sync_Force(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_ExistingDirectory(t *testing.T) {
+func TestGitVolume_Sync_ExistingDirectory(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
-
-	m := New(sourceDir, targetDir, "")
 
 	// Create existing directory at target
 	targetPath := filepath.Join(targetDir, "link1.txt")
@@ -213,10 +225,12 @@ func TestMounter_Sync_ExistingDirectory(t *testing.T) {
 	os.WriteFile(filepath.Join(targetPath, "subfile.txt"), []byte("sub"), 0644)
 
 	// Sync with force - should remove directory and create symlink
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink, Force: true},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink, Force: true},
 	}
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed to replace directory: %v", err)
 	}
 
@@ -227,18 +241,18 @@ func TestMounter_Sync_ExistingDirectory(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_DryRun(t *testing.T) {
+func TestGitVolume_Sync_DryRun(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
-		{Source: "source2.txt", Target: "copy2.txt", Mode: config.ModeCopy},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
+		{Source: "source2.txt", Target: "copy2.txt", Mode: ModeCopy},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	// Sync with dry-run
-	if err := m.Sync(volumes, SyncOptions{DryRun: true}); err != nil {
+	if err := gv.Sync(SyncOptions{DryRun: true}); err != nil {
 		t.Fatalf("Dry-run sync failed: %v", err)
 	}
 
@@ -251,20 +265,20 @@ func TestMounter_Sync_DryRun(t *testing.T) {
 	}
 }
 
-func TestMounter_Unsync_DryRun(t *testing.T) {
+func TestGitVolume_Unsync_DryRun(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	// First sync normally
-	m.Sync(volumes, SyncOptions{})
+	gv.Sync(SyncOptions{})
 
 	// Unsync with dry-run
-	if err := m.Unsync(volumes, UnsyncOptions{DryRun: true}); err != nil {
+	if err := gv.Unsync(UnsyncOptions{DryRun: true}); err != nil {
 		t.Fatalf("Dry-run unsync failed: %v", err)
 	}
 
@@ -274,17 +288,17 @@ func TestMounter_Unsync_DryRun(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_RelativeLinks(t *testing.T) {
+func TestGitVolume_Sync_RelativeLinks(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: config.ModeLink},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	// Sync with relative links
-	if err := m.Sync(volumes, SyncOptions{RelativeLinks: true}); err != nil {
+	if err := gv.Sync(SyncOptions{RelativeLinks: true}); err != nil {
 		t.Fatalf("Sync with relative links failed: %v", err)
 	}
 
@@ -309,16 +323,16 @@ func TestMounter_Sync_RelativeLinks(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_NestedTarget(t *testing.T) {
+func TestGitVolume_Sync_NestedTarget(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "deep/nested/dir/link.txt", Mode: config.ModeLink},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "deep/nested/dir/link.txt", Mode: ModeLink},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -332,16 +346,16 @@ func TestMounter_Sync_NestedTarget(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_GlobalSource_Link(t *testing.T) {
+func TestGitVolume_Sync_GlobalSource_Link(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, globalDir)
-	volumes := []config.Volume{
-		{Source: "secrets/prod.key", Target: "config/key", Mode: config.ModeLink, IsGlobal: true},
+	volumes := []Volume{
+		{Source: "secrets/prod.key", Target: "config/key", Mode: ModeLink, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -368,16 +382,16 @@ func TestMounter_Sync_GlobalSource_Link(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_GlobalSource_Copy(t *testing.T) {
+func TestGitVolume_Sync_GlobalSource_Copy(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, globalDir)
-	volumes := []config.Volume{
-		{Source: "global.txt", Target: "copied.txt", Mode: config.ModeCopy, IsGlobal: true},
+	volumes := []Volume{
+		{Source: "global.txt", Target: "copied.txt", Mode: ModeCopy, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -393,17 +407,17 @@ func TestMounter_Sync_GlobalSource_Copy(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_MixedLocalAndGlobal(t *testing.T) {
+func TestGitVolume_Sync_MixedLocalAndGlobal(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, globalDir)
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "local.txt", Mode: config.ModeLink, IsGlobal: false},
-		{Source: "global.txt", Target: "global.txt", Mode: config.ModeLink, IsGlobal: true},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "local.txt", Mode: ModeLink, IsGlobal: false},
+		{Source: "global.txt", Target: "global.txt", Mode: ModeLink, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -422,19 +436,19 @@ func TestMounter_Sync_MixedLocalAndGlobal(t *testing.T) {
 	}
 }
 
-func TestMounter_Unsync_GlobalSource(t *testing.T) {
+func TestGitVolume_Unsync_GlobalSource(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, globalDir)
-	volumes := []config.Volume{
-		{Source: "source1.txt", Target: "local.txt", Mode: config.ModeLink, IsGlobal: false},
-		{Source: "global.txt", Target: "global.txt", Mode: config.ModeLink, IsGlobal: true},
-		{Source: "secrets/prod.key", Target: "config/key", Mode: config.ModeCopy, IsGlobal: true},
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "local.txt", Mode: ModeLink, IsGlobal: false},
+		{Source: "global.txt", Target: "global.txt", Mode: ModeLink, IsGlobal: true},
+		{Source: "secrets/prod.key", Target: "config/key", Mode: ModeCopy, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
 	// Sync first
-	if err := m.Sync(volumes, SyncOptions{}); err != nil {
+	if err := gv.Sync(SyncOptions{}); err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
 
@@ -450,7 +464,7 @@ func TestMounter_Unsync_GlobalSource(t *testing.T) {
 	}
 
 	// Unsync
-	if err := m.Unsync(volumes, UnsyncOptions{Quiet: true}); err != nil {
+	if err := gv.Unsync(UnsyncOptions{}); err != nil {
 		t.Fatalf("Unsync failed: %v", err)
 	}
 
@@ -466,55 +480,105 @@ func TestMounter_Unsync_GlobalSource(t *testing.T) {
 	}
 }
 
-func TestMounter_Sync_GlobalSource_NotFound(t *testing.T) {
+func TestGitVolume_Sync_GlobalSource_NotFound(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
-	m := New(sourceDir, targetDir, globalDir)
-	volumes := []config.Volume{
-		{Source: "nonexistent.txt", Target: "target.txt", Mode: config.ModeLink, IsGlobal: true},
+	volumes := []Volume{
+		{Source: "nonexistent.txt", Target: "target.txt", Mode: ModeLink, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
-	err := m.Sync(volumes, SyncOptions{})
+	err := gv.Sync(SyncOptions{})
 	if err == nil {
 		t.Error("expected error for non-existent global source")
 	}
 }
 
-func TestMounter_Sync_GlobalSource_EmptyGlobalBase(t *testing.T) {
+func TestGitVolume_Sync_GlobalSource_EmptyGlobalBase(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	// GlobalBase is empty string
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "secrets/key", Target: "config/key", Mode: config.ModeLink, IsGlobal: true},
+	// GlobalDir is empty string
+	volumes := []Volume{
+		{Source: "secrets/key", Target: "config/key", Mode: ModeLink, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	err := m.Sync(volumes, SyncOptions{})
+	err := gv.Sync(SyncOptions{})
 	if err == nil {
-		t.Error("expected error when GlobalBase is empty")
+		t.Error("expected error when GlobalDir is empty")
 	}
 	if err != nil && !strings.Contains(err.Error(), "global directory not configured") {
 		t.Errorf("expected 'global directory not configured' error, got: %v", err)
 	}
 }
 
-func TestMounter_Unsync_GlobalSource_EmptyGlobalBase(t *testing.T) {
+func TestGitVolume_Unsync_GlobalSource_EmptyGlobalBase(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	// GlobalBase is empty string
-	m := New(sourceDir, targetDir, "")
-	volumes := []config.Volume{
-		{Source: "secrets/key", Target: "config/key", Mode: config.ModeLink, IsGlobal: true},
+	// GlobalDir is empty string
+	volumes := []Volume{
+		{Source: "secrets/key", Target: "config/key", Mode: ModeLink, IsGlobal: true},
 	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	err := m.Unsync(volumes, UnsyncOptions{})
+	err := gv.Unsync(UnsyncOptions{})
 	if err == nil {
-		t.Error("expected error when GlobalBase is empty")
+		t.Error("expected error when GlobalDir is empty")
 	}
 	if err != nil && !strings.Contains(err.Error(), "global directory not configured") {
 		t.Errorf("expected 'global directory not configured' error, got: %v", err)
+	}
+}
+
+func TestGitVolume_List(t *testing.T) {
+	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "local.txt", Mode: ModeLink, IsGlobal: false},
+		{Source: "global.txt", Target: "global.txt", Mode: ModeLink, IsGlobal: true},
+		{Source: "nonexistent.txt", Target: "missing.txt", Mode: ModeLink, IsGlobal: false},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
+
+	// Before sync
+	statuses, err := gv.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(statuses) != 3 {
+		t.Errorf("expected 3 statuses, got %d", len(statuses))
+	}
+
+	// Check not mounted status
+	if statuses[0].Status != StatusNotMounted {
+		t.Errorf("expected NOT MOUNTED for local.txt before sync, got %s", statuses[0].Status)
+	}
+
+	// Check missing source
+	if statuses[2].Status != StatusMissingSource {
+		t.Errorf("expected MISSING (Source) for missing.txt, got %s", statuses[2].Status)
+	}
+
+	// Sync local and global
+	volumes = volumes[:2] // Remove the nonexistent one for sync
+	gv.ws.volumes = volumes
+	gv.Sync(SyncOptions{})
+
+	// After sync
+	statuses, _ = gv.List()
+	if statuses[0].Status != StatusOKLinked {
+		t.Errorf("expected OK (Linked) for local.txt after sync, got %s", statuses[0].Status)
+	}
+	if statuses[1].Status != StatusOKLinked {
+		t.Errorf("expected OK (Linked) for global.txt after sync, got %s", statuses[1].Status)
+	}
+
+	// Check display source for global
+	if statuses[1].Source != "@global/global.txt" {
+		t.Errorf("expected @global/global.txt, got %s", statuses[1].Source)
 	}
 }

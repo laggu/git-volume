@@ -1,7 +1,8 @@
-package config
+package gitvolume
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -171,10 +172,10 @@ volumes:
 			}
 			tmpFile.Close()
 
-			// Run LoadConfig
-			cfg, err := LoadConfig(tmpFile.Name(), false)
+			// Run loadConfig
+			cfg, err := loadConfig(tmpFile.Name(), true)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadConfig() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("loadConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
@@ -243,9 +244,9 @@ volumes:
 			}
 			tmpFile.Close()
 
-			cfg, err := LoadConfig(tmpFile.Name(), true)
+			cfg, err := loadConfig(tmpFile.Name(), true)
 			if err != nil {
-				t.Fatalf("LoadConfig() error = %v", err)
+				t.Fatalf("loadConfig() error = %v", err)
 			}
 
 			if cfg.GlobalDir != tt.wantGlobalDir {
@@ -307,9 +308,9 @@ func TestResolveGlobalDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ResolveGlobalDir(tt.globalDir, tt.override)
+			got, err := resolveGlobalDir(tt.globalDir, tt.override)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ResolveGlobalDir() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("resolveGlobalDir() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr {
@@ -317,13 +318,234 @@ func TestResolveGlobalDir(t *testing.T) {
 				if !strings.HasPrefix(tt.want, "/") {
 					// For relative expectations, just check the result is absolute
 					if !filepath.IsAbs(got) {
-						t.Errorf("ResolveGlobalDir() = %q, expected absolute path", got)
+						t.Errorf("resolveGlobalDir() = %q, expected absolute path", got)
 					}
 				} else {
 					if got != tt.want {
-						t.Errorf("ResolveGlobalDir() = %q, want %q", got, tt.want)
+						t.Errorf("resolveGlobalDir() = %q, want %q", got, tt.want)
 					}
 				}
+			}
+		})
+	}
+}
+
+// resolvePath resolves symlinks to get the real path (handles /var -> /private/var on macOS)
+func resolvePath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
+}
+
+func setupTestGitRepo(t *testing.T) (repoDir string, cleanup func()) {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "git-volume-finder-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize git repo
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatal("failed to init git repo:", err)
+	}
+
+	// Configure git user for commits
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = tmpDir
+	cmd.Run()
+	cmd = exec.Command("git", "config", "user.name", "Test")
+	cmd.Dir = tmpDir
+	cmd.Run()
+
+	// Create initial commit
+	testFile := filepath.Join(tmpDir, "README.md")
+	os.WriteFile(testFile, []byte("test"), 0644)
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = tmpDir
+	cmd.Run()
+	cmd = exec.Command("git", "commit", "-m", "initial")
+	cmd.Dir = tmpDir
+	cmd.Run()
+
+	cleanup = func() { os.RemoveAll(tmpDir) }
+	return tmpDir, cleanup
+}
+
+func TestNewWorkspace_LocalConfig(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	// Resolve symlinks for comparison (handles /var -> /private/var on macOS)
+	repoDir = resolvePath(repoDir)
+
+	// Create config file
+	configContent := `volumes:
+  - "source.txt:target.txt"
+`
+	configPath := filepath.Join(repoDir, ConfigFileName)
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create source file
+	os.WriteFile(filepath.Join(repoDir, "source.txt"), []byte("content"), 0644)
+
+	// Change to repo dir
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(repoDir)
+
+	// Create workspace
+	ws, err := newWorkspace("", "", true)
+	if err != nil {
+		t.Fatalf("newWorkspace failed: %v", err)
+	}
+
+	if resolvePath(ws.sourceDir) != repoDir {
+		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, repoDir)
+	}
+	if resolvePath(ws.targetDir) != repoDir {
+		t.Errorf("targetDir = %s, want %s", ws.targetDir, repoDir)
+	}
+	if len(ws.volumes) != 1 {
+		t.Errorf("expected 1 volume, got %d", len(ws.volumes))
+	}
+}
+
+func TestNewWorkspace_CustomPath(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	// Create config file in subdirectory
+	customDir := filepath.Join(repoDir, "configs")
+	os.Mkdir(customDir, 0755)
+	configContent := `volumes:
+  - "data.txt:output.txt"
+`
+	customConfigPath := filepath.Join(customDir, "custom.yaml")
+	if err := os.WriteFile(customConfigPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create source file
+	os.WriteFile(filepath.Join(customDir, "data.txt"), []byte("data"), 0644)
+
+	// Change to repo dir
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(repoDir)
+
+	// Create workspace with custom path
+	ws, err := newWorkspace(customConfigPath, "", true)
+	if err != nil {
+		t.Fatalf("newWorkspace with custom path failed: %v", err)
+	}
+
+	if ws.sourceDir != customDir {
+		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, customDir)
+	}
+	if len(ws.volumes) != 1 {
+		t.Errorf("expected 1 volume, got %d", len(ws.volumes))
+	}
+	if ws.volumes[0].Source != "data.txt" {
+		t.Errorf("Source = %s, want data.txt", ws.volumes[0].Source)
+	}
+}
+
+func TestNewWorkspace_NoConfig(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	// Change to repo dir (no config file)
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(repoDir)
+
+	// Create workspace should fail
+	_, err := newWorkspace("", "", true)
+	if err == nil {
+		t.Error("expected error when no config file exists")
+	}
+}
+
+func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	// Resolve symlinks for comparison (handles /var -> /private/var on macOS)
+	repoDir = resolvePath(repoDir)
+
+	// Create config file
+	configContent := `volumes:
+  - "src.txt:dst.txt"
+`
+	configPath := filepath.Join(repoDir, "my-config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change to repo dir
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(repoDir)
+
+	// Create workspace with relative path
+	ws, err := newWorkspace("my-config.yaml", "", true)
+	if err != nil {
+		t.Fatalf("newWorkspace with relative path failed: %v", err)
+	}
+
+	if resolvePath(ws.sourceDir) != repoDir {
+		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, repoDir)
+	}
+}
+
+func TestHasGlobalVolumes(t *testing.T) {
+	tests := []struct {
+		name    string
+		volumes []Volume
+		want    bool
+	}{
+		{
+			name:    "No volumes",
+			volumes: []Volume{},
+			want:    false,
+		},
+		{
+			name: "Only local volumes",
+			volumes: []Volume{
+				{Source: "a", Target: "b", IsGlobal: false},
+				{Source: "c", Target: "d", IsGlobal: false},
+			},
+			want: false,
+		},
+		{
+			name: "Has global volume",
+			volumes: []Volume{
+				{Source: "a", Target: "b", IsGlobal: false},
+				{Source: "c", Target: "d", IsGlobal: true},
+			},
+			want: true,
+		},
+		{
+			name: "All global volumes",
+			volumes: []Volume{
+				{Source: "a", Target: "b", IsGlobal: true},
+				{Source: "c", Target: "d", IsGlobal: true},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasGlobalVolumes(tt.volumes); got != tt.want {
+				t.Errorf("hasGlobalVolumes() = %v, want %v", got, tt.want)
 			}
 		})
 	}
