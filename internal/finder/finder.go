@@ -15,14 +15,22 @@ type Context struct {
 	Config    *config.Config // Parsed configuration
 	SourceDir string         // Base directory for resolving 'source' paths (where config lives)
 	TargetDir string         // Base directory for resolving 'target' paths (current worktree root)
+	GlobalDir string         // Resolved global directory absolute path for @global/ sources
+}
+
+// FindContextOptions configures the FindContext operation
+type FindContextOptions struct {
+	ConfigPath        string // Custom config file path (default: auto-detected)
+	Quiet             bool   // Suppress non-error output
+	GlobalDirOverride string // Override globalDir from config
 }
 
 // FindContext attempts to locate the git-volume.yaml and determine the context.
-// If configPath is provided, it uses that file directly.
+// If ConfigPath is provided in opts, it uses that file directly.
 // Otherwise, it follows the inheritance logic:
 // 1. Check current worktree root.
 // 2. If not found, check main worktree (git-common-dir).
-func FindContext(configPath string, quiet bool) (*Context, error) {
+func FindContext(opts FindContextOptions) (*Context, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current working directory: %w", err)
@@ -34,34 +42,46 @@ func FindContext(configPath string, quiet bool) (*Context, error) {
 		return nil, fmt.Errorf("failed to find git worktree root: %w", err)
 	}
 
+	override := opts.GlobalDirOverride
+
 	// If custom config path is provided, use it directly
-	if configPath != "" {
-		absConfigPath := configPath
-		if !filepath.IsAbs(configPath) {
-			absConfigPath = filepath.Join(cwd, configPath)
+	if opts.ConfigPath != "" {
+		absConfigPath := opts.ConfigPath
+		if !filepath.IsAbs(opts.ConfigPath) {
+			absConfigPath = filepath.Join(cwd, opts.ConfigPath)
 		}
-		cfg, err := config.LoadConfig(absConfigPath, quiet)
+		cfg, err := config.LoadConfig(absConfigPath, opts.Quiet)
 		if err != nil {
 			return nil, err
+		}
+		globalDir, err := config.ResolveGlobalDir(cfg.GlobalDir, override)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve global directory: %w", err)
 		}
 		return &Context{
 			Config:    cfg,
 			SourceDir: filepath.Dir(absConfigPath),
 			TargetDir: worktreeRoot,
+			GlobalDir: globalDir,
 		}, nil
 	}
 
 	// 2. Check for local override
 	localConfigPath := filepath.Join(worktreeRoot, config.ConfigFileName)
 	if _, err := os.Stat(localConfigPath); err == nil {
-		cfg, err := config.LoadConfig(localConfigPath, quiet)
+		cfg, err := config.LoadConfig(localConfigPath, opts.Quiet)
 		if err != nil {
 			return nil, err
+		}
+		globalDir, err := config.ResolveGlobalDir(cfg.GlobalDir, override)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve global directory: %w", err)
 		}
 		return &Context{
 			Config:    cfg,
 			SourceDir: worktreeRoot,
 			TargetDir: worktreeRoot,
+			GlobalDir: globalDir,
 		}, nil
 	}
 
@@ -79,14 +99,19 @@ func FindContext(configPath string, quiet bool) (*Context, error) {
 	if mainWorktreeRoot != "" && mainWorktreeRoot != worktreeRoot {
 		mainConfigPath := filepath.Join(mainWorktreeRoot, config.ConfigFileName)
 		if _, err := os.Stat(mainConfigPath); err == nil {
-			cfg, err := config.LoadConfig(mainConfigPath, quiet)
+			cfg, err := config.LoadConfig(mainConfigPath, opts.Quiet)
 			if err != nil {
 				return nil, err
+			}
+			globalDir, err := config.ResolveGlobalDir(cfg.GlobalDir, override)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve global directory: %w", err)
 			}
 			return &Context{
 				Config:    cfg,
 				SourceDir: mainWorktreeRoot,
 				TargetDir: worktreeRoot,
+				GlobalDir: globalDir,
 			}, nil
 		}
 	}

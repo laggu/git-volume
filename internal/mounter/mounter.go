@@ -14,6 +14,7 @@ import (
 type Mounter struct {
 	SourceBase string
 	TargetBase string
+	GlobalBase string // Base directory for @global/ sources
 }
 
 // SyncOptions configures the Sync operation
@@ -31,10 +32,11 @@ type UnsyncOptions struct {
 	Quiet   bool // Suppress non-error output
 }
 
-func New(sourceBase, targetBase string) *Mounter {
+func New(sourceBase, targetBase, globalBase string) *Mounter {
 	return &Mounter{
 		SourceBase: sourceBase,
 		TargetBase: targetBase,
+		GlobalBase: globalBase,
 	}
 }
 
@@ -76,12 +78,26 @@ func verifyPathWithinBase(path, base string) error {
 // Sync applies the volumes to the target workspace
 func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 	for _, vol := range volumes {
-		srcPath := filepath.Join(m.SourceBase, vol.Source)
+		// Determine source base directory based on IsGlobal flag
+		var srcBase string
+		var displaySource string
+		if vol.IsGlobal {
+			if m.GlobalBase == "" {
+				return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
+			}
+			srcBase = m.GlobalBase
+			displaySource = "@global/" + vol.Source
+		} else {
+			srcBase = m.SourceBase
+			displaySource = vol.Source
+		}
+
+		srcPath := filepath.Join(srcBase, vol.Source)
 		dstPath := filepath.Join(m.TargetBase, vol.Target)
 
 		// Security: verify paths don't escape base directories via symlinks
-		if err := verifyPathWithinBase(srcPath, m.SourceBase); err != nil {
-			return fmt.Errorf("security error for source %s: %w", vol.Source, err)
+		if err := verifyPathWithinBase(srcPath, srcBase); err != nil {
+			return fmt.Errorf("security error for source %s: %w", displaySource, err)
 		}
 		if err := verifyPathWithinBase(dstPath, m.TargetBase); err != nil {
 			return fmt.Errorf("security error for target %s: %w", vol.Target, err)
@@ -101,7 +117,7 @@ func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 			if vol.Mode == config.ModeCopy {
 				action = "copy"
 			}
-			fmt.Printf("[dry-run] Would %s %s -> %s\n", action, vol.Source, vol.Target)
+			fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
 			continue
 		}
 
@@ -110,7 +126,7 @@ func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 				return fmt.Errorf("failed to copy %s to %s: %w", srcPath, dstPath, err)
 			}
 			if opts.Verbose && !opts.Quiet {
-				fmt.Printf("✓ Copied %s -> %s\n", vol.Source, vol.Target)
+				fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
 			}
 		} else {
 			if err := m.syncLink(srcPath, dstPath, vol.Force, opts.RelativeLinks); err != nil {
@@ -121,7 +137,7 @@ func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 				if opts.RelativeLinks {
 					linkType = "relative"
 				}
-				fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, vol.Source, vol.Target)
+				fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
 			}
 		}
 	}
@@ -131,7 +147,18 @@ func (m *Mounter) Sync(volumes []config.Volume, opts SyncOptions) error {
 // Unsync removes the volumes from the target workspace
 func (m *Mounter) Unsync(volumes []config.Volume, opts UnsyncOptions) error {
 	for _, vol := range volumes {
-		srcPath := filepath.Join(m.SourceBase, vol.Source)
+		// Determine source base directory based on IsGlobal flag
+		var srcBase string
+		if vol.IsGlobal {
+			if m.GlobalBase == "" {
+				return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
+			}
+			srcBase = m.GlobalBase
+		} else {
+			srcBase = m.SourceBase
+		}
+
+		srcPath := filepath.Join(srcBase, vol.Source)
 		dstPath := filepath.Join(m.TargetBase, vol.Target)
 
 		// Security: verify target path doesn't escape base directory via symlinks

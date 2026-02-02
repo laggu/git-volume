@@ -23,7 +23,11 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 1. Find Context
-		ctx, err := finder.FindContext(cfgFile, quiet)
+		ctx, err := finder.FindContext(finder.FindContextOptions{
+			ConfigPath:        cfgFile,
+			Quiet:             quiet,
+			GlobalDirOverride: globalDir,
+		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
@@ -33,7 +37,7 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 		}
 
 		// 2. Execute Unsync
-		mnt := mounter.New(ctx.SourceDir, ctx.TargetDir)
+		mnt := mounter.New(ctx.SourceDir, ctx.TargetDir, ctx.GlobalDir)
 		opts := mounter.UnsyncOptions{
 			DryRun:  dryRun,
 			Verbose: verbose,

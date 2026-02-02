@@ -3,20 +3,33 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-const SampleConfig = `volumes:
+const SampleConfig = `# Optional: custom global directory (default: ~/.git-volume)
+# globalDir: ~/.git-volume
+
+volumes:
   # Example: mount a shared env file
   # - ".env.shared:.env"
   #
   # Example: copy a secret (required for Docker builds)
   # - mount: "secrets/prod.key:config/prod.key"
   #   mode: "copy"
+  #
+  # Example: mount from global directory (@global/ prefix)
+  # - "@global/secrets/prod.key:config/key"
 `
+
+// GlobalPrefix is the prefix used to reference global directory files
+const GlobalPrefix = "@global/"
+
+// DefaultGlobalDir is the default global directory path
+const DefaultGlobalDir = "~/.git-volume"
 
 // Constants
 const (
@@ -31,15 +44,17 @@ const (
 
 // Config represents the top-level structure of git-volume.yaml
 type Config struct {
-	Volumes []Volume `yaml:"volumes"`
+	GlobalDir string   `yaml:"globalDir"` // Custom global directory (default: ~/.git-volume)
+	Volumes   []Volume `yaml:"volumes"`
 }
 
 // Volume represents a single volume mapping
 type Volume struct {
-	Source string `yaml:"-"` // Parsed from Mount or simple string
-	Target string `yaml:"-"` // Parsed from Mount or simple string
-	Mode   string `yaml:"mode"`
-	Force  bool   `yaml:"force"`
+	Source   string `yaml:"-"` // Parsed from Mount or simple string
+	Target   string `yaml:"-"` // Parsed from Mount or simple string
+	Mode     string `yaml:"mode"`
+	Force    bool   `yaml:"force"`
+	IsGlobal bool   `yaml:"-"` // True if source uses @global/ prefix
 }
 
 // rawVolume is used for intermediate parsing
@@ -107,7 +122,7 @@ func (v *Volume) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // parseMount extracts source and target from "source:target" format
-// Handles Windows drive letters (e.g., C:\path:target)
+// Handles Windows drive letters (e.g., C:\path:target) and @global/ prefix
 func (v *Volume) parseMount(mount string) error {
 	// Find the separator colon (not a Windows drive letter colon)
 	sepIndex := findMountSeparator(mount)
@@ -115,11 +130,20 @@ func (v *Volume) parseMount(mount string) error {
 		return fmt.Errorf("invalid mount format: %s (expected source:target)", mount)
 	}
 
-	v.Source = strings.TrimSpace(mount[:sepIndex])
+	source := strings.TrimSpace(mount[:sepIndex])
 	v.Target = strings.TrimSpace(mount[sepIndex+1:])
 
-	if v.Source == "" || v.Target == "" {
+	if source == "" || v.Target == "" {
 		return fmt.Errorf("invalid mount format: %s (source and target cannot be empty)", mount)
+	}
+
+	// Check for @global/ prefix
+	if strings.HasPrefix(source, GlobalPrefix) {
+		v.IsGlobal = true
+		v.Source = strings.TrimPrefix(source, GlobalPrefix)
+	} else {
+		v.IsGlobal = false
+		v.Source = source
 	}
 
 	// Note: Mode is set by caller (UnmarshalYAML handles defaults)
@@ -209,4 +233,52 @@ func LoadConfig(path string, quiet bool) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// HasGlobalVolumes checks if any volume uses @global/ prefix
+func HasGlobalVolumes(volumes []Volume) bool {
+	for _, v := range volumes {
+		if v.IsGlobal {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveGlobalDir resolves the global directory path.
+// It handles ~ expansion and returns an absolute path.
+// If globalDir is empty, it uses DefaultGlobalDir.
+// If override is provided (non-empty), it takes precedence over both.
+func ResolveGlobalDir(globalDir, override string) (string, error) {
+	// Override takes precedence
+	dir := globalDir
+	if override != "" {
+		dir = override
+	}
+
+	// Use default if empty
+	if dir == "" {
+		dir = DefaultGlobalDir
+	}
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(dir, "~/") || dir == "~" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		if dir == "~" {
+			dir = homeDir
+		} else {
+			dir = filepath.Join(homeDir, dir[2:])
+		}
+	}
+
+	// Convert to absolute path
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for global directory: %w", err)
+	}
+
+	return absDir, nil
 }

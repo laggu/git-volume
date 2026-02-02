@@ -11,9 +11,10 @@ import (
 
 // Global flags
 var (
-	cfgFile string
-	verbose bool
-	quiet   bool
+	cfgFile   string
+	globalDir string
+	verbose   bool
+	quiet     bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -36,6 +37,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: auto-detected)")
+	rootCmd.PersistentFlags().StringVar(&globalDir, "global-dir", "", "global directory for @global/ sources (default: ~/.git-volume)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-error output")
 	rootCmd.MarkFlagsMutuallyExclusive("verbose", "quiet")
