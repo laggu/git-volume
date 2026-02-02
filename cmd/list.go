@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/laggu/git-volume/internal/config"
-	"github.com/laggu/git-volume/internal/finder"
-	"github.com/laggu/git-volume/internal/mounter"
+	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
 )
 
@@ -21,86 +19,37 @@ var listCmd = &cobra.Command{
 	Short:        "Lists all volumes and their status",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := finder.FindContext(finder.FindContextOptions{
+		gv, err := gitvolume.New(gitvolume.Options{
 			ConfigPath:        cfgFile,
-			Quiet:             quiet,
 			GlobalDirOverride: globalDir,
+			Quiet:             quiet,
 		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
 
 		if !quiet {
-			fmt.Printf("📂 Source Config: %s\n", filepath.Join(ctx.SourceDir, config.ConfigFileName))
-			fmt.Printf("🎯 Target Root:   %s\n", ctx.TargetDir)
-			if config.HasGlobalVolumes(ctx.Config.Volumes) {
-				fmt.Printf("🌐 Global Dir:    %s\n", ctx.GlobalDir)
+			fmt.Printf("📂 Source Config: %s\n", filepath.Join(gv.SourceDir(), gitvolume.ConfigFileName))
+			fmt.Printf("🎯 Target Root:   %s\n", gv.TargetDir())
+			if gv.HasGlobalVolumes() {
+				fmt.Printf("🌐 Global Dir:    %s\n", gv.GlobalDir())
 			}
 			fmt.Println()
 		}
 
+		statuses, err := gv.List()
+		if err != nil {
+			return err
+		}
+
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "SOURCE\tTARGET\tMODE\tSTATUS")
-
-		for _, v := range ctx.Config.Volumes {
-			var srcBase string
-			var displaySource string
-			if v.IsGlobal {
-				srcBase = ctx.GlobalDir
-				displaySource = "@global/" + v.Source
-			} else {
-				srcBase = ctx.SourceDir
-				displaySource = v.Source
-			}
-			status := checkStatus(v, srcBase, ctx.TargetDir)
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", displaySource, v.Target, v.Mode, status)
+		for _, s := range statuses {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Source, s.Target, s.Mode, s.Status)
 		}
 		w.Flush()
 		return nil
 	},
-}
-
-func checkStatus(v config.Volume, srcBase, targetBase string) string {
-	srcPath := filepath.Join(srcBase, v.Source)
-	targetPath := filepath.Join(targetBase, v.Target)
-
-	// Check Source
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		return "MISSING (Source)"
-	}
-
-	// Check Target
-	info, err := os.Lstat(targetPath)
-	if os.IsNotExist(err) {
-		return "NOT MOUNTED"
-	}
-	if err != nil {
-		return fmt.Sprintf("ERROR (%v)", err)
-	}
-
-	if v.Mode == config.ModeLink {
-		if info.Mode()&os.ModeSymlink != 0 {
-			link, err := os.Readlink(targetPath)
-			if err != nil {
-				return "ERROR (readlink)"
-			}
-			// Resolve relative symlink based on symlink's parent directory
-			if !filepath.IsAbs(link) {
-				link = filepath.Join(filepath.Dir(targetPath), link)
-			}
-			if mounter.PathsEqual(link, srcPath) {
-				return "OK (Linked)"
-			}
-			return "WRONG LINK"
-		}
-		return "EXISTS (Not Link)"
-	}
-
-	// Copy Mode
-	if info.Mode().IsRegular() {
-		return "OK (Copied)" // We could check hash here for "MODIFIED" status but strict check might be slow for list
-	}
-	return "EXISTS (Not File)"
 }
 
 func init() {

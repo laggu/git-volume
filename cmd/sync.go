@@ -6,11 +6,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
-
-	"github.com/laggu/git-volume/internal/config"
-	"github.com/laggu/git-volume/internal/finder"
-	"github.com/laggu/git-volume/internal/mounter"
 )
 
 var (
@@ -29,33 +26,28 @@ It checks the current directory for git-volume.yaml first. If not found,
 it looks for it in the main Git worktree (inheritance).`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 1. Find Context (Config + Dirs)
-		ctx, err := finder.FindContext(finder.FindContextOptions{
+		gv, err := gitvolume.New(gitvolume.Options{
 			ConfigPath:        cfgFile,
-			Quiet:             quiet,
 			GlobalDirOverride: globalDir,
+			Verbose:           verbose,
+			Quiet:             quiet,
 		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
 		}
 
 		if !quiet {
-			fmt.Printf("📂 Using config from: %s\n", ctx.SourceDir)
-			fmt.Printf("🎯 Target worktree: %s\n", ctx.TargetDir)
-			if config.HasGlobalVolumes(ctx.Config.Volumes) {
-				fmt.Printf("🌐 Global directory: %s\n", ctx.GlobalDir)
+			fmt.Printf("📂 Using config from: %s\n", gv.SourceDir())
+			fmt.Printf("🎯 Target worktree: %s\n", gv.TargetDir())
+			if gv.HasGlobalVolumes() {
+				fmt.Printf("🌐 Global directory: %s\n", gv.GlobalDir())
 			}
 		}
 
-		// 2. Execute Sync
-		mnt := mounter.New(ctx.SourceDir, ctx.TargetDir, ctx.GlobalDir)
-		opts := mounter.SyncOptions{
+		if err := gv.Sync(gitvolume.SyncOptions{
 			DryRun:        dryRun,
 			RelativeLinks: relativeLinks,
-			Verbose:       verbose,
-			Quiet:         quiet,
-		}
-		if err := mnt.Sync(ctx.Config.Volumes, opts); err != nil {
+		}); err != nil {
 			return err
 		}
 
