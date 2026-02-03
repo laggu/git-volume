@@ -32,6 +32,14 @@ type UnsyncOptions struct {
 	DryRun bool // Show what would be done without making changes
 }
 
+// AddOptions configures the Add operation
+type AddOptions struct {
+	Force bool   // Overwrite existing files in global directory
+	As    string // Save as specific path/name (single file only)
+	Path  string // Save to subdirectory within global directory
+	Quiet bool   // Suppress non-error output
+}
+
 // InitOptions configures the Init operation
 type InitOptions struct {
 	Quiet bool // Suppress non-error output
@@ -368,6 +376,87 @@ func (g *GitVolume) syncCopy(src, dst string, force bool) error {
 	}
 
 	return copyFile(src, dst)
+}
+
+// Add copies files to the global git-volume directory
+// This is a standalone function that doesn't require a GitVolume instance
+func Add(files []string, opts AddOptions) error {
+	// Validate: --as can only be used with single file
+	if opts.As != "" && len(files) > 1 {
+		return fmt.Errorf("--as can only be used with a single file")
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	globalDir := filepath.Join(home, ".git-volume")
+
+	// Ensure global directory exists
+	if err := os.MkdirAll(globalDir, DefaultDirPerm); err != nil {
+		return fmt.Errorf("failed to create global directory %s: %w", globalDir, err)
+	}
+
+	for _, file := range files {
+		// Check if source file exists
+		srcInfo, err := os.Stat(file)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("source file does not exist: %s", file)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to stat source file %s: %w", file, err)
+		}
+
+		// Only allow regular files
+		if !srcInfo.Mode().IsRegular() {
+			return fmt.Errorf("source is not a regular file: %s", file)
+		}
+
+		// Get absolute path of source
+		srcAbs, err := filepath.Abs(file)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path: %w", err)
+		}
+
+		// Determine destination path
+		var dstPath string
+		var displayDst string
+
+		if opts.As != "" {
+			// --as: use specified path/name
+			dstPath = filepath.Join(globalDir, opts.As)
+			displayDst = "@global/" + opts.As
+		} else if opts.Path != "" {
+			// --path: use subdirectory + original basename
+			basename := filepath.Base(srcAbs)
+			dstPath = filepath.Join(globalDir, opts.Path, basename)
+			displayDst = "@global/" + filepath.Join(opts.Path, basename)
+		} else {
+			// Default: globalDir + basename
+			basename := filepath.Base(srcAbs)
+			dstPath = filepath.Join(globalDir, basename)
+			displayDst = "@global/" + basename
+		}
+
+		// Check if destination exists
+		if _, err := os.Stat(dstPath); err == nil {
+			if !opts.Force {
+				return fmt.Errorf("file already exists: %s (use --force to overwrite)", displayDst)
+			}
+		}
+
+		// Copy file
+		if err := copyFile(srcAbs, dstPath); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", file, err)
+		}
+
+		if !opts.Quiet {
+			fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
+		}
+	}
+
+	return nil
 }
 
 // syncLink handles link mode synchronization
