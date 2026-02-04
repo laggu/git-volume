@@ -1,6 +1,7 @@
 package gitvolume
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -413,62 +414,72 @@ func Add(files []string, opts AddOptions) error {
 		return fmt.Errorf("failed to create global directory %s: %w", globalDir, err)
 	}
 
+	var errs []error
 	for _, file := range files {
-		// Check if source file exists
-		srcInfo, err := os.Stat(file)
-		if os.IsNotExist(err) {
-			return fmt.Errorf("source file does not exist: %s", file)
+		if err := addFile(file, globalDir, opts); err != nil {
+			errs = append(errs, err)
 		}
-		if err != nil {
-			return fmt.Errorf("failed to stat source file %s: %w", file, err)
-		}
+	}
 
-		// Only allow regular files
-		if !srcInfo.Mode().IsRegular() {
-			return fmt.Errorf("source is not a regular file: %s", file)
-		}
+	return errors.Join(errs...)
+}
 
-		// Get absolute path of source
-		srcAbs, err := filepath.Abs(file)
-		if err != nil {
-			return fmt.Errorf("failed to get absolute path: %w", err)
-		}
+// addFile copies a single file to the global directory
+func addFile(file, globalDir string, opts AddOptions) error {
+	// Check if source file exists
+	srcInfo, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("source file does not exist: %s", file)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to stat source file %s: %w", file, err)
+	}
 
-		// Determine destination path
-		var targetSubPath string
-		if opts.As != "" {
-			// --as: use specified path/name
-			targetSubPath = opts.As
+	// Only allow regular files
+	if !srcInfo.Mode().IsRegular() {
+		return fmt.Errorf("source is not a regular file: %s", file)
+	}
+
+	// Get absolute path of source
+	srcAbs, err := filepath.Abs(file)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Determine destination path
+	var targetSubPath string
+	if opts.As != "" {
+		// --as: use specified path/name
+		targetSubPath = opts.As
+	} else {
+		basename := filepath.Base(srcAbs)
+		if opts.Path != "" {
+			// --path: use subdirectory + original basename
+			targetSubPath = filepath.Join(opts.Path, basename)
 		} else {
-			basename := filepath.Base(srcAbs)
-			if opts.Path != "" {
-				// --path: use subdirectory + original basename
-				targetSubPath = filepath.Join(opts.Path, basename)
-			} else {
-				// Default: basename only
-				targetSubPath = basename
-			}
+			// Default: basename only
+			targetSubPath = basename
 		}
-		dstPath := filepath.Join(globalDir, targetSubPath)
-		displayDst := "@global/" + targetSubPath
+	}
+	dstPath := filepath.Join(globalDir, targetSubPath)
+	displayDst := "@global/" + targetSubPath
 
-		// Check if destination exists
-		if _, err := os.Stat(dstPath); err == nil {
-			if !opts.Force {
-				return fmt.Errorf("file already exists: %s (use --force to overwrite)", displayDst)
-			}
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
+	// Check if destination exists
+	if _, err := os.Stat(dstPath); err == nil {
+		if !opts.Force {
+			return fmt.Errorf("file already exists: %s (use --force to overwrite)", displayDst)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
+	}
 
-		// Copy file
-		if err := copyFile(srcAbs, dstPath); err != nil {
-			return fmt.Errorf("failed to copy %s: %w", file, err)
-		}
+	// Copy file
+	if err := copyFile(srcAbs, dstPath); err != nil {
+		return fmt.Errorf("failed to copy %s: %w", file, err)
+	}
 
-		if !opts.Quiet {
-			fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
-		}
+	if !opts.Quiet {
+		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
 	}
 
 	return nil
