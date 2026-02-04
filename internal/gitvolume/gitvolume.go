@@ -424,20 +424,20 @@ func Add(files []string, opts AddOptions) error {
 	return errors.Join(errs...)
 }
 
-// addFile copies a single file to the global directory
+// addFile copies a single file or directory to the global directory
 func addFile(file, globalDir string, opts AddOptions) error {
-	// Check if source file exists
+	// Check if source exists
 	srcInfo, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("source file does not exist: %s", file)
+		return fmt.Errorf("source does not exist: %s", file)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to stat source file %s: %w", file, err)
+		return fmt.Errorf("failed to stat source %s: %w", file, err)
 	}
 
-	// Only allow regular files
-	if !srcInfo.Mode().IsRegular() {
-		return fmt.Errorf("source is not a regular file: %s", file)
+	// Only allow regular files and directories
+	if !srcInfo.Mode().IsRegular() && !srcInfo.IsDir() {
+		return fmt.Errorf("source must be a regular file or directory: %s", file)
 	}
 
 	// Get absolute path of source
@@ -464,18 +464,37 @@ func addFile(file, globalDir string, opts AddOptions) error {
 	dstPath := filepath.Join(globalDir, targetSubPath)
 	displayDst := "@global/" + targetSubPath
 
-	// Check if destination exists
-	if _, err := os.Stat(dstPath); err == nil {
+	// Security: ensure the final destination path is within the global directory
+	if err := verifyPathWithinBase(dstPath, globalDir); err != nil {
+		return fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
+	}
+
+	// Check if destination exists and validate type compatibility
+	srcInfo, _ = os.Stat(srcAbs)
+	if dstInfo, err := os.Stat(dstPath); err == nil {
+		// Check type compatibility: source and destination must be same type
+		if srcInfo.IsDir() && !dstInfo.IsDir() {
+			return fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
+		}
+		if !srcInfo.IsDir() && dstInfo.IsDir() {
+			return fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
+		}
 		if !opts.Force {
-			return fmt.Errorf("file already exists: %s (use --force to overwrite)", displayDst)
+			return fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
 	}
 
-	// Copy file
-	if err := copyFile(srcAbs, dstPath); err != nil {
-		return fmt.Errorf("failed to copy %s: %w", file, err)
+	// Copy file or directory
+	if srcInfo.IsDir() {
+		if err := copyDir(srcAbs, dstPath); err != nil {
+			return fmt.Errorf("failed to copy directory %s: %w", file, err)
+		}
+	} else {
+		if err := copyFile(srcAbs, dstPath); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", file, err)
+		}
 	}
 
 	if !opts.Quiet {
