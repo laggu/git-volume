@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // GitVolume is the main entry point for git-volume operations
@@ -386,6 +387,20 @@ func Add(files []string, opts AddOptions) error {
 		return fmt.Errorf("--as can only be used with a single file")
 	}
 
+	// Validate: paths must not contain .. or be absolute
+	if strings.Contains(opts.As, "..") {
+		return fmt.Errorf("--as path cannot contain '..'")
+	}
+	if strings.Contains(opts.Path, "..") {
+		return fmt.Errorf("--path cannot contain '..'")
+	}
+	if filepath.IsAbs(opts.As) {
+		return fmt.Errorf("--as must be a relative path")
+	}
+	if filepath.IsAbs(opts.Path) {
+		return fmt.Errorf("--path must be a relative path")
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
@@ -420,30 +435,30 @@ func Add(files []string, opts AddOptions) error {
 		}
 
 		// Determine destination path
-		var dstPath string
-		var displayDst string
-
+		var targetSubPath string
 		if opts.As != "" {
 			// --as: use specified path/name
-			dstPath = filepath.Join(globalDir, opts.As)
-			displayDst = "@global/" + opts.As
-		} else if opts.Path != "" {
-			// --path: use subdirectory + original basename
-			basename := filepath.Base(srcAbs)
-			dstPath = filepath.Join(globalDir, opts.Path, basename)
-			displayDst = "@global/" + filepath.Join(opts.Path, basename)
+			targetSubPath = opts.As
 		} else {
-			// Default: globalDir + basename
 			basename := filepath.Base(srcAbs)
-			dstPath = filepath.Join(globalDir, basename)
-			displayDst = "@global/" + basename
+			if opts.Path != "" {
+				// --path: use subdirectory + original basename
+				targetSubPath = filepath.Join(opts.Path, basename)
+			} else {
+				// Default: basename only
+				targetSubPath = basename
+			}
 		}
+		dstPath := filepath.Join(globalDir, targetSubPath)
+		displayDst := "@global/" + targetSubPath
 
 		// Check if destination exists
 		if _, err := os.Stat(dstPath); err == nil {
 			if !opts.Force {
 				return fmt.Errorf("file already exists: %s (use --force to overwrite)", displayDst)
 			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
 		}
 
 		// Copy file
