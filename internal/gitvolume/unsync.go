@@ -1,6 +1,7 @@
 package gitvolume
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,15 +14,19 @@ type UnsyncOptions struct {
 
 // Unsync removes the volumes from the target workspace
 func (g *GitVolume) Unsync(opts UnsyncOptions) error {
+	var errs []error
+
 	for _, vol := range g.ctx.Volumes {
 		// Check global directory
 		if vol.IsGlobal && g.ctx.GlobalDir == "" {
-			return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
+			errs = append(errs, fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source))
+			continue
 		}
 
 		// Security: verify target path doesn't escape base directory via symlinks
 		if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
-			return fmt.Errorf("security error for target %s: %w", vol.Target, err)
+			errs = append(errs, fmt.Errorf("security error for target %s: %w", vol.Target, err))
+			continue
 		}
 
 		// Check if target exists
@@ -30,7 +35,8 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 			continue // Already gone
 		}
 		if err != nil {
-			return fmt.Errorf("failed to stat target %s: %w", vol.TargetPath, err)
+			errs = append(errs, fmt.Errorf("failed to stat target %s: %w", vol.TargetPath, err))
+			continue
 		}
 
 		// Stateless Verification
@@ -68,7 +74,8 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 				continue
 			}
 			if err := os.Remove(vol.TargetPath); err != nil {
-				return fmt.Errorf("failed to remove %s: %w", vol.TargetPath, err)
+				errs = append(errs, fmt.Errorf("failed to remove %s: %w", vol.TargetPath, err))
+				continue
 			}
 			if !g.quiet {
 				fmt.Printf("✓ Removed %s\n", vol.Target)
@@ -82,5 +89,6 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 			}
 		}
 	}
-	return nil
+
+	return errors.Join(errs...)
 }
