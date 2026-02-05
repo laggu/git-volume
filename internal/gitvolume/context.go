@@ -401,7 +401,7 @@ func (c *Context) findConfigPath(configPath, cwd, worktreeRoot string) (string, 
 	// 3. Main worktree config (Inheritance)
 	mainWorktreeRoot, err := findCommonDir(worktreeRoot)
 	if err != nil {
-		return "", "", fmt.Errorf("config not found in current worktree, and failed to check main worktree: %v", err)
+		return "", "", fmt.Errorf("config not found in current worktree, and failed to check main worktree: %w", err)
 	}
 
 	if mainWorktreeRoot != "" && mainWorktreeRoot != worktreeRoot {
