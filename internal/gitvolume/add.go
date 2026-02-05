@@ -99,7 +99,6 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 	}
 
 	// Check if destination exists and validate type compatibility
-	srcInfo, _ = os.Stat(srcAbs)
 	if dstInfo, err := os.Stat(dstPath); err == nil {
 		// Check type compatibility: source and destination must be same type
 		if srcInfo.IsDir() && !dstInfo.IsDir() {

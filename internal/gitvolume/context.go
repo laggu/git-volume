@@ -238,10 +238,7 @@ const (
 // CheckStatus checks the mount status of the volume
 // Uses the pre-resolved SourcePath and TargetPath
 func (v *Volume) CheckStatus() VolumeStatus {
-	displaySource := v.Source
-	if v.IsGlobal {
-		displaySource = GlobalPrefix + v.Source
-	}
+	displaySource := v.DisplaySource()
 
 	// Check if source exists
 	if _, err := os.Stat(v.SourcePath); os.IsNotExist(err) {
@@ -340,27 +337,47 @@ func (c *Context) Load(configPath string, quiet bool) error {
 	}
 
 	// 3. Load and apply config
-	volumes, err := loadConfig(absConfigPath, quiet)
+	cfg, err := loadConfig(absConfigPath, quiet)
 	if err != nil {
 		return err
 	}
 
+	// 4. Apply globalDir from config if specified
+	// Priority: CLI flag > config file > default
+	// If GlobalDir equals default, config file can override it
+	if cfg.GlobalDir != "" {
+		defaultGlobalDir, _ := resolveGlobalDir("", "")
+		if c.GlobalDir == defaultGlobalDir {
+			globalDir, err := resolveGlobalDir(cfg.GlobalDir, "")
+			if err != nil {
+				return fmt.Errorf("failed to resolve globalDir from config: %w", err)
+			}
+			c.GlobalDir = globalDir
+		}
+	}
+
 	c.SourceDir = sourceDir
 	c.TargetDir = worktreeRoot
+	c.Volumes = cfg.Volumes
 
 	// Resolve absolute paths for each volume
-	for i := range volumes {
-		v := &volumes[i]
+	c.ResolveVolumePaths()
+
+	return nil
+}
+
+// ResolveVolumePaths resolves the absolute SourcePath and TargetPath for all volumes.
+// This should be called after SourceDir, TargetDir, GlobalDir, and Volumes are set.
+func (c *Context) ResolveVolumePaths() {
+	for i := range c.Volumes {
+		v := &c.Volumes[i]
 		srcBase := c.SourceDir
 		if v.IsGlobal {
 			srcBase = c.GlobalDir
 		}
 		v.SourcePath = filepath.Join(srcBase, v.Source)
-		v.TargetPath = filepath.Join(worktreeRoot, v.Target)
+		v.TargetPath = filepath.Join(c.TargetDir, v.Target)
 	}
-
-	c.Volumes = volumes
-	return nil
 }
 
 // findConfigPath finds the config file path and returns (absConfigPath, sourceDir, error)
@@ -401,17 +418,21 @@ func (c *Context) findConfigPath(configPath, cwd, worktreeRoot string) (string, 
 // Config Loading Helpers
 // =============================================================================
 
+// rawConfig represents the raw configuration file structure
+type rawConfig struct {
+	GlobalDir string   `yaml:"globalDir"`
+	Volumes   []Volume `yaml:"volumes"`
+}
+
 // loadConfig reads and parses the configuration file
-// Returns volumes and error
-func loadConfig(path string, quiet bool) ([]Volume, error) {
+// Returns rawConfig and error
+func loadConfig(path string, quiet bool) (*rawConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var cfg struct {
-		Volumes []Volume `yaml:"volumes"`
-	}
+	var cfg rawConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -421,7 +442,7 @@ func loadConfig(path string, quiet bool) ([]Volume, error) {
 		fmt.Fprintf(os.Stderr, "⚠️  Warning: no volumes defined in %s\n", path)
 	}
 
-	return cfg.Volumes, nil
+	return &cfg, nil
 }
 
 // resolveGlobalDir resolves the global directory path.

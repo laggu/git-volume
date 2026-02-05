@@ -173,7 +173,7 @@ volumes:
 			tmpFile.Close()
 
 			// Run loadConfig
-			volumes, err := loadConfig(tmpFile.Name(), true)
+			cfg, err := loadConfig(tmpFile.Name(), true)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("loadConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -183,12 +183,12 @@ volumes:
 			}
 
 			// Verify results
-			if len(volumes) != len(tt.want) {
-				t.Errorf("got %d volumes, want %d", len(volumes), len(tt.want))
+			if len(cfg.Volumes) != len(tt.want) {
+				t.Errorf("got %d volumes, want %d", len(cfg.Volumes), len(tt.want))
 				return
 			}
 
-			for i, v := range volumes {
+			for i, v := range cfg.Volumes {
 				if v != tt.want[i] {
 					t.Errorf("volume[%d] = %+v, want %+v", i, v, tt.want[i])
 				}
