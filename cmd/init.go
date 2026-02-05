@@ -16,7 +16,11 @@ var initCmd = &cobra.Command{
 git-volume.yaml configuration file in the current directory.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return gitvolume.Init(gitvolume.InitOptions{Quiet: quiet})
+		gv, err := gitvolume.New(gitvolume.Options{Quiet: quiet})
+		if err != nil {
+			return err
+		}
+		return gv.Init()
 	},
 }
 

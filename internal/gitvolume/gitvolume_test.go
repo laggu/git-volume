@@ -54,14 +54,25 @@ func setupTestEnvWithGlobal(t *testing.T) (sourceDir, targetDir, globalDir strin
 	return
 }
 
-// createTestGitVolume creates a GitVolume for testing with pre-configured workspace
+// createTestGitVolume creates a GitVolume for testing with pre-configured context
 func createTestGitVolume(sourceDir, targetDir, globalDir string, volumes []Volume) *GitVolume {
+	// Resolve paths for each volume
+	for i := range volumes {
+		v := &volumes[i]
+		srcBase := sourceDir
+		if v.IsGlobal {
+			srcBase = globalDir
+		}
+		v.SourcePath = filepath.Join(srcBase, v.Source)
+		v.TargetPath = filepath.Join(targetDir, v.Target)
+	}
+
 	return &GitVolume{
-		ws: &Workspace{
-			sourceDir: sourceDir,
-			targetDir: targetDir,
-			globalDir: globalDir,
-			volumes:   volumes,
+		ctx: &Context{
+			SourceDir: sourceDir,
+			TargetDir: targetDir,
+			GlobalDir: globalDir,
+			Volumes:   volumes,
 		},
 		verbose: false,
 		quiet:   true,
@@ -565,7 +576,7 @@ func TestGitVolume_List(t *testing.T) {
 
 	// Sync local and global
 	volumes = volumes[:2] // Remove the nonexistent one for sync
-	gv.ws.volumes = volumes
+	gv.ctx.Volumes = volumes
 	gv.Sync(SyncOptions{})
 
 	// After sync

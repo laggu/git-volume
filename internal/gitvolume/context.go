@@ -10,6 +10,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Constants
+const (
+	ModeLink         = "link"
+	ModeCopy         = "copy"
+	ConfigFileName   = "git-volume.yaml"
+	GlobalPrefix     = "@global/"
+	DefaultGlobalDir = "~/.git-volume"
+	DefaultDirPerm   = 0755
+	DefaultFilePerm  = 0644
+)
+
 // SampleConfig is the sample configuration for init command
 const SampleConfig = `# Optional: custom global directory (default: ~/.git-volume)
 # globalDir: ~/.git-volume
@@ -26,45 +37,28 @@ volumes:
   # - "@global/secrets/prod.key:config/key"
 `
 
-// Constants
-const (
-	ModeLink         = "link"
-	ModeCopy         = "copy"
-	ConfigFileName   = "git-volume.yaml"
-	GlobalPrefix     = "@global/"
-	DefaultGlobalDir = "~/.git-volume"
-	DefaultDirPerm   = 0755
-	DefaultFilePerm  = 0644
-)
-
-// Workspace holds the execution context for git-volume
-type Workspace struct {
-	sourceDir string   // Base directory for resolving 'source' paths (where config lives)
-	targetDir string   // Base directory for resolving 'target' paths (current worktree root)
-	globalDir string   // Resolved global directory absolute path for @global/ sources
-	volumes   []Volume // Parsed volume list
-}
+// =============================================================================
+// Volume
+// =============================================================================
 
 // Volume represents a single volume mapping
 type Volume struct {
-	Source   string // Source path (relative)
-	Target   string // Target path (relative)
-	Mode     string // "link" or "copy"
-	Force    bool   // Whether to overwrite existing files
-	IsGlobal bool   // True if source uses @global/ prefix
+	Source     string // Source path (relative, for display)
+	Target     string // Target path (relative)
+	SourcePath string // Resolved absolute source path
+	TargetPath string // Resolved absolute target path
+	Mode       string // "link" or "copy"
+	Force      bool   // Whether to overwrite existing files
+	IsGlobal   bool   // True if source uses @global/ prefix
 }
 
-// rawConfig is used for intermediate YAML parsing
-type rawConfig struct {
-	GlobalDir string   `yaml:"globalDir"`
-	Volumes   []Volume `yaml:"volumes"`
-}
-
-// rawVolume is used for intermediate parsing
-type rawVolume struct {
-	Mount string `yaml:"mount"`
-	Mode  string `yaml:"mode"`
-	Force bool   `yaml:"force"`
+// DisplaySource returns the display name for the source path
+// (with @global/ prefix for global volumes)
+func (v *Volume) DisplaySource() string {
+	if v.IsGlobal {
+		return GlobalPrefix + v.Source
+	}
+	return v.Source
 }
 
 // UnmarshalYAML implements custom parsing to support both string "source:target"
@@ -87,7 +81,11 @@ func (v *Volume) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	// Case 2: Object format with "mount" field
-	var raw rawVolume
+	var raw struct {
+		Mount string `yaml:"mount"`
+		Mode  string `yaml:"mode"`
+		Force bool   `yaml:"force"`
+	}
 	if err := value.Decode(&raw); err != nil {
 		return err
 	}
@@ -217,14 +215,203 @@ func validatePath(path string) error {
 	return nil
 }
 
+// VolumeStatus represents the status of a single volume
+type VolumeStatus struct {
+	Source string // Display source path (includes @global/ prefix if applicable)
+	Target string
+	Mode   string
+	Status string
+}
+
+// Status constants
+const (
+	StatusOKLinked      = "OK (Linked)"
+	StatusOKCopied      = "OK (Copied)"
+	StatusNotMounted    = "NOT MOUNTED"
+	StatusMissingSource = "MISSING (Source)"
+	StatusWrongLink     = "WRONG LINK"
+	StatusExistsNotLink = "EXISTS (Not Link)"
+	StatusExistsNotFile = "EXISTS (Not File)"
+	StatusError         = "ERROR"
+)
+
+// CheckStatus checks the mount status of the volume
+// Uses the pre-resolved SourcePath and TargetPath
+func (v *Volume) CheckStatus() VolumeStatus {
+	displaySource := v.Source
+	if v.IsGlobal {
+		displaySource = GlobalPrefix + v.Source
+	}
+
+	// Check if source exists
+	if _, err := os.Stat(v.SourcePath); os.IsNotExist(err) {
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusMissingSource}
+	}
+
+	// Check if target exists
+	info, err := os.Lstat(v.TargetPath)
+	if os.IsNotExist(err) {
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusNotMounted}
+	}
+	if err != nil {
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
+	}
+
+	// Check status by mode
+	if v.Mode == ModeLink {
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, err := os.Readlink(v.TargetPath)
+			if err != nil {
+				return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
+			}
+			// Resolve relative symlink based on symlink's parent directory
+			if !filepath.IsAbs(link) {
+				link = filepath.Join(filepath.Dir(v.TargetPath), link)
+			}
+			if pathsEqual(link, v.SourcePath) {
+				return VolumeStatus{displaySource, v.Target, v.Mode, StatusOKLinked}
+			}
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusWrongLink}
+		}
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusExistsNotLink}
+	}
+
+	// Copy Mode
+	if info.Mode().IsRegular() {
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusOKCopied}
+	}
+	return VolumeStatus{displaySource, v.Target, v.Mode, StatusExistsNotFile}
+}
+
+// =============================================================================
+// Context
+// =============================================================================
+
+// Context holds the execution state for git-volume operations
+type Context struct {
+	SourceDir string   // Base directory for resolving 'source' paths (where config lives)
+	TargetDir string   // Base directory for resolving 'target' paths (current worktree root)
+	GlobalDir string   // Resolved global directory absolute path for @global/ sources
+	Volumes   []Volume // Parsed volume list
+}
+
+// HasGlobalVolumes returns true if any volume uses @global/ prefix
+func (c *Context) HasGlobalVolumes() bool {
+	for _, v := range c.Volumes {
+		if v.IsGlobal {
+			return true
+		}
+	}
+	return false
+}
+
+// NewContext creates a new Context with only GlobalDir resolved.
+// Config loading is deferred to the Load method.
+// globalDirOverride: override globalDir (empty string to use default)
+func NewContext(globalDirOverride string) (*Context, error) {
+	globalDir, err := resolveGlobalDir("", globalDirOverride)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve global directory: %w", err)
+	}
+	return &Context{
+		GlobalDir: globalDir,
+	}, nil
+}
+
+// Load loads configuration from config file and populates the Context.
+// configPath: custom config file path (empty string for auto-detection)
+// quiet: suppress warning messages
+func (c *Context) Load(configPath string, quiet bool) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// 1. Find the root of the current git worktree
+	worktreeRoot, err := FindWorktreeRoot(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to find git worktree root: %w", err)
+	}
+
+	// 2. Find config file path and source directory
+	absConfigPath, sourceDir, err := c.findConfigPath(configPath, cwd, worktreeRoot)
+	if err != nil {
+		return err
+	}
+
+	// 3. Load and apply config
+	volumes, err := loadConfig(absConfigPath, quiet)
+	if err != nil {
+		return err
+	}
+
+	c.SourceDir = sourceDir
+	c.TargetDir = worktreeRoot
+
+	// Resolve absolute paths for each volume
+	for i := range volumes {
+		v := &volumes[i]
+		srcBase := c.SourceDir
+		if v.IsGlobal {
+			srcBase = c.GlobalDir
+		}
+		v.SourcePath = filepath.Join(srcBase, v.Source)
+		v.TargetPath = filepath.Join(worktreeRoot, v.Target)
+	}
+
+	c.Volumes = volumes
+	return nil
+}
+
+// findConfigPath finds the config file path and returns (absConfigPath, sourceDir, error)
+// Search order: custom path > local worktree > main worktree
+func (c *Context) findConfigPath(configPath, cwd, worktreeRoot string) (string, string, error) {
+	// 1. Custom config path provided
+	if configPath != "" {
+		absConfigPath := configPath
+		if !filepath.IsAbs(configPath) {
+			absConfigPath = filepath.Join(cwd, configPath)
+		}
+		return absConfigPath, filepath.Dir(absConfigPath), nil
+	}
+
+	// 2. Local worktree config
+	localConfigPath := filepath.Join(worktreeRoot, ConfigFileName)
+	if _, err := os.Stat(localConfigPath); err == nil {
+		return localConfigPath, worktreeRoot, nil
+	}
+
+	// 3. Main worktree config (Inheritance)
+	mainWorktreeRoot, err := findCommonDir(worktreeRoot)
+	if err != nil {
+		return "", "", fmt.Errorf("config not found in current worktree, and failed to check main worktree: %v", err)
+	}
+
+	if mainWorktreeRoot != "" && mainWorktreeRoot != worktreeRoot {
+		mainConfigPath := filepath.Join(mainWorktreeRoot, ConfigFileName)
+		if _, err := os.Stat(mainConfigPath); err == nil {
+			return mainConfigPath, mainWorktreeRoot, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("%s not found in current worktree or main worktree", ConfigFileName)
+}
+
+// =============================================================================
+// Config Loading Helpers
+// =============================================================================
+
 // loadConfig reads and parses the configuration file
-func loadConfig(path string, quiet bool) (*rawConfig, error) {
+// Returns volumes and error
+func loadConfig(path string, quiet bool) ([]Volume, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var cfg rawConfig
+	var cfg struct {
+		Volumes []Volume `yaml:"volumes"`
+	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -234,17 +421,7 @@ func loadConfig(path string, quiet bool) (*rawConfig, error) {
 		fmt.Fprintf(os.Stderr, "⚠️  Warning: no volumes defined in %s\n", path)
 	}
 
-	return &cfg, nil
-}
-
-// hasGlobalVolumes checks if any volume uses @global/ prefix
-func hasGlobalVolumes(volumes []Volume) bool {
-	for _, v := range volumes {
-		if v.IsGlobal {
-			return true
-		}
-	}
-	return false
+	return cfg.Volumes, nil
 }
 
 // resolveGlobalDir resolves the global directory path.
@@ -283,91 +460,4 @@ func resolveGlobalDir(globalDir, override string) (string, error) {
 	}
 
 	return absDir, nil
-}
-
-// newWorkspace creates a new Workspace by loading configuration and resolving paths.
-// configPath: custom config file path (empty string for auto-detection)
-// globalDirOverride: override globalDir from config (empty string to use config or default)
-// quiet: suppress warning messages
-func newWorkspace(configPath, globalDirOverride string, quiet bool) (*Workspace, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
-	}
-
-	// 1. Find the root of the current git worktree
-	worktreeRoot, err := FindWorktreeRoot(cwd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find git worktree root: %w", err)
-	}
-
-	// If custom config path is provided, use it directly
-	if configPath != "" {
-		absConfigPath := configPath
-		if !filepath.IsAbs(configPath) {
-			absConfigPath = filepath.Join(cwd, configPath)
-		}
-		cfg, err := loadConfig(absConfigPath, quiet)
-		if err != nil {
-			return nil, err
-		}
-		globalDir, err := resolveGlobalDir(cfg.GlobalDir, globalDirOverride)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve global directory: %w", err)
-		}
-		return &Workspace{
-			sourceDir: filepath.Dir(absConfigPath),
-			targetDir: worktreeRoot,
-			globalDir: globalDir,
-			volumes:   cfg.Volumes,
-		}, nil
-	}
-
-	// 2. Check for local override
-	localConfigPath := filepath.Join(worktreeRoot, ConfigFileName)
-	if _, err := os.Stat(localConfigPath); err == nil {
-		cfg, err := loadConfig(localConfigPath, quiet)
-		if err != nil {
-			return nil, err
-		}
-		globalDir, err := resolveGlobalDir(cfg.GlobalDir, globalDirOverride)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve global directory: %w", err)
-		}
-		return &Workspace{
-			sourceDir: worktreeRoot,
-			targetDir: worktreeRoot,
-			globalDir: globalDir,
-			volumes:   cfg.Volumes,
-		}, nil
-	}
-
-	// 3. Fallback to main worktree (Inheritance)
-	mainWorktreeRoot, err := findCommonDir(worktreeRoot)
-	if err != nil {
-		return nil, fmt.Errorf("config not found in current worktree, and failed to check main worktree: %v", err)
-	}
-
-	// If mainWorktreeRoot is different from worktreeRoot, check there
-	if mainWorktreeRoot != "" && mainWorktreeRoot != worktreeRoot {
-		mainConfigPath := filepath.Join(mainWorktreeRoot, ConfigFileName)
-		if _, err := os.Stat(mainConfigPath); err == nil {
-			cfg, err := loadConfig(mainConfigPath, quiet)
-			if err != nil {
-				return nil, err
-			}
-			globalDir, err := resolveGlobalDir(cfg.GlobalDir, globalDirOverride)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve global directory: %w", err)
-			}
-			return &Workspace{
-				sourceDir: mainWorktreeRoot,
-				targetDir: worktreeRoot,
-				globalDir: globalDir,
-				volumes:   cfg.Volumes,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("%s not found in current worktree or main worktree", ConfigFileName)
 }
