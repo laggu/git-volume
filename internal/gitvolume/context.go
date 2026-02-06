@@ -12,13 +12,13 @@ import (
 
 // Constants
 const (
-	ModeLink         = "link"
-	ModeCopy         = "copy"
-	ConfigFileName   = "git-volume.yaml"
-	GlobalPrefix     = "@global/"
-	DefaultGlobalDir = "~/.git-volume"
-	DefaultDirPerm   = 0755
-	DefaultFilePerm  = 0644
+	ModeLink        = "link"
+	ModeCopy        = "copy"
+	ConfigFileName  = "git-volume.yaml"
+	GlobalPrefix    = "@global/"
+	GlobalDirectory = "~/.git-volume"
+	DefaultDirPerm  = 0755
+	DefaultFilePerm = 0644
 )
 
 // SampleConfig is the sample configuration for init command
@@ -300,7 +300,7 @@ func (c *Context) HasGlobalVolumes() bool {
 }
 
 // NewContext creates a new Context with only GlobalDir resolved.
-// GlobalDir is always ~/.git-volume (DefaultGlobalDir).
+// GlobalDir is always ~/.git-volume (GlobalDirectory).
 // Config loading is deferred to the Load method.
 func NewContext() (*Context, error) {
 	globalDir, err := resolveGlobalDir()
@@ -431,7 +431,7 @@ func loadConfig(path string, quiet bool) (*rawConfig, error) {
 // resolveGlobalDir resolves the global directory path (~/.git-volume).
 // It handles ~ expansion and returns an absolute path.
 func resolveGlobalDir() (string, error) {
-	dir := DefaultGlobalDir
+	dir := GlobalDirectory
 
 	// Expand ~ to home directory
 	homeDir, err := os.UserHomeDir()
