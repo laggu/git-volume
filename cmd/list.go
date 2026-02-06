@@ -20,9 +20,8 @@ var listCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gv, err := gitvolume.New(gitvolume.Options{
-			ConfigPath:        cfgFile,
-			GlobalDirOverride: globalDir,
-			Quiet:             quiet,
+			ConfigPath: cfgFile,
+			Quiet:      quiet,
 		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)

@@ -12,20 +12,17 @@ import (
 
 // Constants
 const (
-	ModeLink         = "link"
-	ModeCopy         = "copy"
-	ConfigFileName   = "git-volume.yaml"
-	GlobalPrefix     = "@global/"
-	DefaultGlobalDir = "~/.git-volume"
-	DefaultDirPerm   = 0755
-	DefaultFilePerm  = 0644
+	ModeLink        = "link"
+	ModeCopy        = "copy"
+	ConfigFileName  = "git-volume.yaml"
+	GlobalPrefix    = "@global/"
+	GlobalDirectory = "~/.git-volume"
+	DefaultDirPerm  = 0755
+	DefaultFilePerm = 0644
 )
 
 // SampleConfig is the sample configuration for init command
-const SampleConfig = `# Optional: custom global directory (default: ~/.git-volume)
-# globalDir: ~/.git-volume
-
-volumes:
+const SampleConfig = `volumes:
   # Example: mount a shared env file
   # - ".env.shared:.env"
   #
@@ -303,10 +300,10 @@ func (c *Context) HasGlobalVolumes() bool {
 }
 
 // NewContext creates a new Context with only GlobalDir resolved.
+// GlobalDir is always ~/.git-volume (GlobalDirectory).
 // Config loading is deferred to the Load method.
-// globalDirOverride: override globalDir (empty string to use default)
-func NewContext(globalDirOverride string) (*Context, error) {
-	globalDir, err := resolveGlobalDir("", globalDirOverride)
+func NewContext() (*Context, error) {
+	globalDir, err := resolveGlobalDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve global directory: %w", err)
 	}
@@ -342,20 +339,7 @@ func (c *Context) Load(configPath string, quiet bool) error {
 		return err
 	}
 
-	// 4. Apply globalDir from config if specified
-	// Priority: CLI flag > config file > default
-	// If GlobalDir equals default, config file can override it
-	if cfg.GlobalDir != "" {
-		defaultGlobalDir, _ := resolveGlobalDir("", "")
-		if c.GlobalDir == defaultGlobalDir {
-			globalDir, err := resolveGlobalDir(cfg.GlobalDir, "")
-			if err != nil {
-				return fmt.Errorf("failed to resolve globalDir from config: %w", err)
-			}
-			c.GlobalDir = globalDir
-		}
-	}
-
+	// 4. Set context fields
 	c.SourceDir = sourceDir
 	c.TargetDir = worktreeRoot
 	c.Volumes = cfg.Volumes
@@ -420,8 +404,7 @@ func (c *Context) findConfigPath(configPath, cwd, worktreeRoot string) (string, 
 
 // rawConfig represents the raw configuration file structure
 type rawConfig struct {
-	GlobalDir string   `yaml:"globalDir"`
-	Volumes   []Volume `yaml:"volumes"`
+	Volumes []Volume `yaml:"volumes"`
 }
 
 // loadConfig reads and parses the configuration file
@@ -445,40 +428,17 @@ func loadConfig(path string, quiet bool) (*rawConfig, error) {
 	return &cfg, nil
 }
 
-// resolveGlobalDir resolves the global directory path.
+// resolveGlobalDir resolves the global directory path (~/.git-volume).
 // It handles ~ expansion and returns an absolute path.
-// If globalDir is empty, it uses DefaultGlobalDir.
-// If override is provided (non-empty), it takes precedence over both.
-func resolveGlobalDir(globalDir, override string) (string, error) {
-	// Override takes precedence
-	dir := globalDir
-	if override != "" {
-		dir = override
-	}
-
-	// Use default if empty
-	if dir == "" {
-		dir = DefaultGlobalDir
-	}
+func resolveGlobalDir() (string, error) {
+	dir := GlobalDirectory
 
 	// Expand ~ to home directory
-	if strings.HasPrefix(dir, "~/") || dir == "~" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		if dir == "~" {
-			dir = homeDir
-		} else {
-			dir = filepath.Join(homeDir, dir[2:])
-		}
-	}
-
-	// Convert to absolute path
-	absDir, err := filepath.Abs(dir)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path for global directory: %w", err)
+		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
+	dir = filepath.Join(homeDir, dir[2:]) // Remove "~/"
 
-	return absDir, nil
+	return dir, nil
 }
