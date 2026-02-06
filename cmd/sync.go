@@ -36,6 +36,10 @@ it looks for it in the main Git worktree (inheritance).`,
 			return fmt.Errorf("initialization failed: %w", err)
 		}
 
+		if err := gv.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
 		if !quiet {
 			fmt.Printf("📂 Using config from: %s\n", gv.SourceDir())
 			fmt.Printf("🎯 Target worktree: %s\n", gv.TargetDir())

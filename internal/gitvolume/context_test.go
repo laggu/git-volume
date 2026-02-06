@@ -197,65 +197,6 @@ volumes:
 	}
 }
 
-func TestGlobalDirParsing(t *testing.T) {
-	tests := []struct {
-		name          string
-		yamlData      string
-		wantGlobalDir string
-	}{
-		{
-			name: "Default GlobalDir (empty)",
-			yamlData: `
-volumes:
-  - ".env:.env"
-`,
-			wantGlobalDir: "",
-		},
-		{
-			name: "Custom GlobalDir",
-			yamlData: `
-globalDir: ~/.my-secrets
-volumes:
-  - "@global/key:config/key"
-`,
-			wantGlobalDir: "~/.my-secrets",
-		},
-		{
-			name: "Absolute GlobalDir",
-			yamlData: `
-globalDir: /opt/secrets
-volumes:
-  - "@global/key:config/key"
-`,
-			wantGlobalDir: "/opt/secrets",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpFile, err := os.CreateTemp("", "git-volume-test-*.yaml")
-			if err != nil {
-				t.Fatalf("Failed to create temp file: %v", err)
-			}
-			defer os.Remove(tmpFile.Name())
-
-			if _, err := tmpFile.WriteString(tt.yamlData); err != nil {
-				t.Fatalf("Failed to write to temp file: %v", err)
-			}
-			tmpFile.Close()
-
-			cfg, err := loadConfig(tmpFile.Name(), true)
-			if err != nil {
-				t.Fatalf("loadConfig() error = %v", err)
-			}
-
-			if cfg.GlobalDir != tt.wantGlobalDir {
-				t.Errorf("GlobalDir = %q, want %q", cfg.GlobalDir, tt.wantGlobalDir)
-			}
-		})
-	}
-}
-
 func TestResolveGlobalDir(t *testing.T) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -400,20 +341,23 @@ func TestNewWorkspace_LocalConfig(t *testing.T) {
 	defer os.Chdir(oldDir)
 	os.Chdir(repoDir)
 
-	// Create workspace
-	ws, err := newWorkspace("", "", true)
+	// Create context and load config
+	ctx, err := NewContext("")
 	if err != nil {
-		t.Fatalf("newWorkspace failed: %v", err)
+		t.Fatalf("NewContext failed: %v", err)
+	}
+	if err := ctx.Load("", true); err != nil {
+		t.Fatalf("Load failed: %v", err)
 	}
 
-	if resolvePath(ws.sourceDir) != repoDir {
-		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, repoDir)
+	if resolvePath(ctx.SourceDir) != repoDir {
+		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, repoDir)
 	}
-	if resolvePath(ws.targetDir) != repoDir {
-		t.Errorf("targetDir = %s, want %s", ws.targetDir, repoDir)
+	if resolvePath(ctx.TargetDir) != repoDir {
+		t.Errorf("TargetDir = %s, want %s", ctx.TargetDir, repoDir)
 	}
-	if len(ws.volumes) != 1 {
-		t.Errorf("expected 1 volume, got %d", len(ws.volumes))
+	if len(ctx.Volumes) != 1 {
+		t.Errorf("expected 1 volume, got %d", len(ctx.Volumes))
 	}
 }
 
@@ -440,20 +384,23 @@ func TestNewWorkspace_CustomPath(t *testing.T) {
 	defer os.Chdir(oldDir)
 	os.Chdir(repoDir)
 
-	// Create workspace with custom path
-	ws, err := newWorkspace(customConfigPath, "", true)
+	// Create context with custom path
+	ctx, err := NewContext("")
 	if err != nil {
-		t.Fatalf("newWorkspace with custom path failed: %v", err)
+		t.Fatalf("NewContext failed: %v", err)
+	}
+	if err := ctx.Load(customConfigPath, true); err != nil {
+		t.Fatalf("Load with custom path failed: %v", err)
 	}
 
-	if ws.sourceDir != customDir {
-		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, customDir)
+	if ctx.SourceDir != customDir {
+		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, customDir)
 	}
-	if len(ws.volumes) != 1 {
-		t.Errorf("expected 1 volume, got %d", len(ws.volumes))
+	if len(ctx.Volumes) != 1 {
+		t.Errorf("expected 1 volume, got %d", len(ctx.Volumes))
 	}
-	if ws.volumes[0].Source != "data.txt" {
-		t.Errorf("Source = %s, want data.txt", ws.volumes[0].Source)
+	if ctx.Volumes[0].Source != "data.txt" {
+		t.Errorf("Source = %s, want data.txt", ctx.Volumes[0].Source)
 	}
 }
 
@@ -466,9 +413,12 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	defer os.Chdir(oldDir)
 	os.Chdir(repoDir)
 
-	// Create workspace should fail
-	_, err := newWorkspace("", "", true)
-	if err == nil {
+	// Create context and load should fail
+	ctx, err := NewContext("")
+	if err != nil {
+		t.Fatalf("NewContext should not fail: %v", err)
+	}
+	if err := ctx.Load("", true); err == nil {
 		t.Error("expected error when no config file exists")
 	}
 }
@@ -494,14 +444,17 @@ func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
 	defer os.Chdir(oldDir)
 	os.Chdir(repoDir)
 
-	// Create workspace with relative path
-	ws, err := newWorkspace("my-config.yaml", "", true)
+	// Create context with relative path
+	ctx, err := NewContext("")
 	if err != nil {
-		t.Fatalf("newWorkspace with relative path failed: %v", err)
+		t.Fatalf("NewContext failed: %v", err)
+	}
+	if err := ctx.Load("my-config.yaml", true); err != nil {
+		t.Fatalf("Load with relative path failed: %v", err)
 	}
 
-	if resolvePath(ws.sourceDir) != repoDir {
-		t.Errorf("sourceDir = %s, want %s", ws.sourceDir, repoDir)
+	if resolvePath(ctx.SourceDir) != repoDir {
+		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, repoDir)
 	}
 }
 
@@ -544,8 +497,9 @@ func TestHasGlobalVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := hasGlobalVolumes(tt.volumes); got != tt.want {
-				t.Errorf("hasGlobalVolumes() = %v, want %v", got, tt.want)
+			ctx := &Context{Volumes: tt.volumes}
+			if got := ctx.HasGlobalVolumes(); got != tt.want {
+				t.Errorf("HasGlobalVolumes() = %v, want %v", got, tt.want)
 			}
 		})
 	}

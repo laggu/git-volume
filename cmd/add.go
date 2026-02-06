@@ -36,11 +36,14 @@ Examples:
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return gitvolume.Add(args, gitvolume.AddOptions{
+		gv, err := gitvolume.New(gitvolume.Options{GlobalDirOverride: globalDir, Quiet: quiet})
+		if err != nil {
+			return err
+		}
+		return gv.Add(args, gitvolume.AddOptions{
 			Force: addForce,
 			As:    addAs,
 			Path:  addPath,
-			Quiet: quiet,
 		})
 	},
 }

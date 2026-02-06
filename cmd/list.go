@@ -28,6 +28,10 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("initialization failed: %w", err)
 		}
 
+		if err := gv.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
 		if !quiet {
 			fmt.Printf("📂 Source Config: %s\n", filepath.Join(gv.SourceDir(), gitvolume.ConfigFileName))
 			fmt.Printf("🎯 Target Root:   %s\n", gv.TargetDir())
