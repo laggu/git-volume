@@ -10,15 +10,14 @@ type GitVolume struct {
 
 // Options configures GitVolume creation
 type Options struct {
-	ConfigPath        string // Custom config file path (optional)
-	GlobalDirOverride string // Override globalDir from config (optional)
-	Verbose           bool   // Verbose output
-	Quiet             bool   // Suppress non-error output
+	ConfigPath string // Custom config file path (optional)
+	Verbose    bool   // Verbose output
+	Quiet      bool   // Suppress non-error output
 }
 
 // New creates a new GitVolume instance without loading config
 func New(opts Options) (*GitVolume, error) {
-	ctx, err := NewContext(opts.GlobalDirOverride)
+	ctx, err := NewContext()
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -203,71 +202,14 @@ func TestResolveGlobalDir(t *testing.T) {
 		t.Fatalf("Failed to get home directory: %v", err)
 	}
 
-	tests := []struct {
-		name      string
-		globalDir string
-		override  string
-		want      string
-		wantErr   bool
-	}{
-		{
-			name:      "Default (empty) resolves to ~/.git-volume",
-			globalDir: "",
-			override:  "",
-			want:      filepath.Join(homeDir, ".git-volume"),
-			wantErr:   false,
-		},
-		{
-			name:      "Tilde expansion",
-			globalDir: "~/.my-secrets",
-			override:  "",
-			want:      filepath.Join(homeDir, ".my-secrets"),
-			wantErr:   false,
-		},
-		{
-			name:      "Override takes precedence",
-			globalDir: "~/.config-value",
-			override:  "~/.override-value",
-			want:      filepath.Join(homeDir, ".override-value"),
-			wantErr:   false,
-		},
-		{
-			name:      "Override with absolute path",
-			globalDir: "~/.config-value",
-			override:  "/opt/secrets",
-			want:      "/opt/secrets",
-			wantErr:   false,
-		},
-		{
-			name:      "Tilde only",
-			globalDir: "~",
-			override:  "",
-			want:      homeDir,
-			wantErr:   false,
-		},
+	got, err := resolveGlobalDir()
+	if err != nil {
+		t.Fatalf("resolveGlobalDir() error = %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveGlobalDir(tt.globalDir, tt.override)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("resolveGlobalDir() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr {
-				// Handle absolute path comparison
-				if !strings.HasPrefix(tt.want, "/") {
-					// For relative expectations, just check the result is absolute
-					if !filepath.IsAbs(got) {
-						t.Errorf("resolveGlobalDir() = %q, expected absolute path", got)
-					}
-				} else {
-					if got != tt.want {
-						t.Errorf("resolveGlobalDir() = %q, want %q", got, tt.want)
-					}
-				}
-			}
-		})
+	want := filepath.Join(homeDir, ".git-volume")
+	if got != want {
+		t.Errorf("resolveGlobalDir() = %q, want %q", got, want)
 	}
 }
 
@@ -342,7 +284,7 @@ func TestNewWorkspace_LocalConfig(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Create context and load config
-	ctx, err := NewContext("")
+	ctx, err := NewContext()
 	if err != nil {
 		t.Fatalf("NewContext failed: %v", err)
 	}
@@ -385,7 +327,7 @@ func TestNewWorkspace_CustomPath(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Create context with custom path
-	ctx, err := NewContext("")
+	ctx, err := NewContext()
 	if err != nil {
 		t.Fatalf("NewContext failed: %v", err)
 	}
@@ -414,7 +356,7 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Create context and load should fail
-	ctx, err := NewContext("")
+	ctx, err := NewContext()
 	if err != nil {
 		t.Fatalf("NewContext should not fail: %v", err)
 	}
@@ -445,7 +387,7 @@ func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
 	os.Chdir(repoDir)
 
 	// Create context with relative path
-	ctx, err := NewContext("")
+	ctx, err := NewContext()
 	if err != nil {
 		t.Fatalf("NewContext failed: %v", err)
 	}

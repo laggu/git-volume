@@ -22,10 +22,9 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gv, err := gitvolume.New(gitvolume.Options{
-			ConfigPath:        cfgFile,
-			GlobalDirOverride: globalDir,
-			Verbose:           verbose,
-			Quiet:             quiet,
+			ConfigPath: cfgFile,
+			Verbose:    verbose,
+			Quiet:      quiet,
 		})
 		if err != nil {
 			return fmt.Errorf("initialization failed: %w", err)
