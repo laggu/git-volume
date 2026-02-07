@@ -1,5 +1,11 @@
-sandbox
+.agent
 
-git-volume.yaml 
+git-volume.yaml
+.env
 
+# Binary
 git-volume
+
+# GoReleaser
+dist/
+sandbox

@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# GoReleaser configuration for git-volume
+# Documentation: https://goreleaser.com
+
+version: 2
+
+project_name: git-volume
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: git-volume
+    main: ./main.go
+    binary: git-volume
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/laggu/git-volume/cmd.version={{.Version}}
+      - -X github.com/laggu/git-volume/cmd.commit={{.Commit}}
+      - -X github.com/laggu/git-volume/cmd.date={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: "New Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug Fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Other"
+      order: 999
+
+release:
+  github:
+    owner: laggu
+    name: git-volume
+  draft: false
+  prerelease: auto
+  mode: replace
+  name_template: "v{{ .Version }}"
+
+homebrew_casks:
+  - name: git-volume
+    repository:
+      owner: laggu
+      name: homebrew-tap
+      token: "{{ .Env.RELEASE_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/laggu/git-volume"
+    description: "Manage environment files across Git worktrees"
+    license: "MIT"
+    skip_upload: auto
+
+scoops:
+  - repository:
+      owner: laggu
+      name: scoop-bucket
+      token: "{{ .Env.RELEASE_TOKEN }}"
+    homepage: "https://github.com/laggu/git-volume"
+    description: "Manage environment files across Git worktrees"
+    license: MIT
+    skip_upload: auto
