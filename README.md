@@ -15,6 +15,18 @@
 
 ## 📦 Installation
 
+### Homebrew
+```bash
+brew install laggu/tap/git-volume
+```
+
+### Scoop (Windows)
+```bash
+scoop bucket add laggu https://github.com/laggu/scoop-bucket.git
+scoop install git-volume
+```
+
+### Go
 ```bash
 go install github.com/laggu/git-volume@latest
 ```
@@ -46,13 +58,12 @@ git volume list
 
 ## 📖 Commands
 
-| Command | Description |
-|---------|-------------|
-| `git volume init` | Create global directory and sample configuration file |
-| `git volume sync` | Mount volumes to current worktree based on configuration |
-| `git volume unsync` | Remove mounted volumes (modified files are preserved) |
-| `git volume list` | Display current volume status |
-| `git volume worktree add <path> <branch>` | Create worktree + automatic sync |
+| Command             | Description                                              |
+| ------------------- | -------------------------------------------------------- |
+| `git volume init`   | Create global directory and sample configuration file    |
+| `git volume sync`   | Mount volumes to current worktree based on configuration |
+| `git volume unsync` | Remove mounted volumes (modified files are preserved)    |
+| `git volume list`   | Display current volume status                            |
 
 ## ⚙️ Configuration File (`git-volume.yaml`)
 
@@ -69,10 +80,10 @@ volumes:
 
 ### Mode Comparison
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `link` | Create symbolic link | Local development (changes reflect immediately) |
-| `copy` | Copy file | Docker builds (environments without symlink support) |
+| Mode   | Description          | Use Case                                             |
+| ------ | -------------------- | ---------------------------------------------------- |
+| `link` | Create symbolic link | Local development (changes reflect immediately)      |
+| `copy` | Copy file            | Docker builds (environments without symlink support) |
 
 ## 🔄 Worktree Inheritance
 
