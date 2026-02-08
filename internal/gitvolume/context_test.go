@@ -5,6 +5,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUnmarshalYAML(t *testing.T) {
@@ -161,36 +164,26 @@ volumes:
 		t.Run(tt.name, func(t *testing.T) {
 			// Write temp file
 			tmpFile, err := os.CreateTemp("", "git-volume-test-*.yaml")
-			if err != nil {
-				t.Fatalf("Failed to create temp file: %v", err)
-			}
-			defer os.Remove(tmpFile.Name())
+			require.NoError(t, err)
+			defer func() { _ = os.Remove(tmpFile.Name()) }()
 
-			if _, err := tmpFile.WriteString(tt.yamlData); err != nil {
-				t.Fatalf("Failed to write to temp file: %v", err)
-			}
-			tmpFile.Close()
+			_, err = tmpFile.WriteString(tt.yamlData)
+			require.NoError(t, err)
+			_ = tmpFile.Close()
 
 			// Run loadConfig
 			cfg, err := loadConfig(tmpFile.Name(), true)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("loadConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
 			if tt.wantErr {
+				assert.Error(t, err)
 				return
 			}
+			require.NoError(t, err)
 
 			// Verify results
-			if len(cfg.Volumes) != len(tt.want) {
-				t.Errorf("got %d volumes, want %d", len(cfg.Volumes), len(tt.want))
-				return
-			}
+			assert.Equal(t, len(tt.want), len(cfg.Volumes))
 
 			for i, v := range cfg.Volumes {
-				if v != tt.want[i] {
-					t.Errorf("volume[%d] = %+v, want %+v", i, v, tt.want[i])
-				}
+				assert.Equal(t, tt.want[i], v)
 			}
 		})
 	}
@@ -198,19 +191,13 @@ volumes:
 
 func TestResolveGlobalDir(t *testing.T) {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("Failed to get home directory: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err := resolveGlobalDir()
-	if err != nil {
-		t.Fatalf("resolveGlobalDir() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	want := filepath.Join(homeDir, ".git-volume")
-	if got != want {
-		t.Errorf("resolveGlobalDir() = %q, want %q", got, want)
-	}
+	assert.Equal(t, want, got)
 }
 
 // resolvePath resolves symlinks to get the real path (handles /var -> /private/var on macOS)
@@ -225,37 +212,36 @@ func resolvePath(path string) string {
 func setupTestGitRepo(t *testing.T) (repoDir string, cleanup func()) {
 	t.Helper()
 	tmpDir, err := os.MkdirTemp("", "git-volume-finder-test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatal("failed to init git repo:", err)
-	}
+	err = cmd.Run()
+	require.NoError(t, err, "failed to init git repo")
 
 	// Configure git user for commits
 	cmd = exec.Command("git", "config", "user.email", "test@test.com")
 	cmd.Dir = tmpDir
-	cmd.Run()
+	require.NoError(t, cmd.Run())
+
 	cmd = exec.Command("git", "config", "user.name", "Test")
 	cmd.Dir = tmpDir
-	cmd.Run()
+	require.NoError(t, cmd.Run())
 
 	// Create initial commit
 	testFile := filepath.Join(tmpDir, "README.md")
-	os.WriteFile(testFile, []byte("test"), 0644)
+	require.NoError(t, os.WriteFile(testFile, []byte("test"), 0644))
+
 	cmd = exec.Command("git", "add", ".")
 	cmd.Dir = tmpDir
-	cmd.Run()
+	require.NoError(t, cmd.Run())
+
 	cmd = exec.Command("git", "commit", "-m", "initial")
 	cmd.Dir = tmpDir
-	cmd.Run()
+	require.NoError(t, cmd.Run())
 
-	cleanup = func() { os.RemoveAll(tmpDir) }
+	cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	return tmpDir, cleanup
 }
 
@@ -271,36 +257,24 @@ func TestNewWorkspace_LocalConfig(t *testing.T) {
   - "source.txt:target.txt"
 `
 	configPath := filepath.Join(repoDir, ConfigFileName)
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	// Create source file
-	os.WriteFile(filepath.Join(repoDir, "source.txt"), []byte("content"), 0644)
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "source.txt"), []byte("content"), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context and load config
 	ctx, err := NewContext()
-	if err != nil {
-		t.Fatalf("NewContext failed: %v", err)
-	}
-	if err := ctx.Load("", true); err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, ctx.Load("", true))
 
-	if resolvePath(ctx.SourceDir) != repoDir {
-		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, repoDir)
-	}
-	if resolvePath(ctx.TargetDir) != repoDir {
-		t.Errorf("TargetDir = %s, want %s", ctx.TargetDir, repoDir)
-	}
-	if len(ctx.Volumes) != 1 {
-		t.Errorf("expected 1 volume, got %d", len(ctx.Volumes))
-	}
+	assert.Equal(t, repoDir, resolvePath(ctx.SourceDir))
+	assert.Equal(t, repoDir, resolvePath(ctx.TargetDir))
+	assert.Equal(t, 1, len(ctx.Volumes))
 }
 
 func TestNewWorkspace_CustomPath(t *testing.T) {
@@ -309,60 +283,44 @@ func TestNewWorkspace_CustomPath(t *testing.T) {
 
 	// Create config file in subdirectory
 	customDir := filepath.Join(repoDir, "configs")
-	os.Mkdir(customDir, 0755)
+	require.NoError(t, os.Mkdir(customDir, 0755))
 	configContent := `volumes:
   - "data.txt:output.txt"
 `
 	customConfigPath := filepath.Join(customDir, "custom.yaml")
-	if err := os.WriteFile(customConfigPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(customConfigPath, []byte(configContent), 0644))
 
 	// Create source file
-	os.WriteFile(filepath.Join(customDir, "data.txt"), []byte("data"), 0644)
+	require.NoError(t, os.WriteFile(filepath.Join(customDir, "data.txt"), []byte("data"), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context with custom path
 	ctx, err := NewContext()
-	if err != nil {
-		t.Fatalf("NewContext failed: %v", err)
-	}
-	if err := ctx.Load(customConfigPath, true); err != nil {
-		t.Fatalf("Load with custom path failed: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, ctx.Load(customConfigPath, true))
 
-	if ctx.SourceDir != customDir {
-		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, customDir)
-	}
-	if len(ctx.Volumes) != 1 {
-		t.Errorf("expected 1 volume, got %d", len(ctx.Volumes))
-	}
-	if ctx.Volumes[0].Source != "data.txt" {
-		t.Errorf("Source = %s, want data.txt", ctx.Volumes[0].Source)
-	}
+	assert.Equal(t, customDir, ctx.SourceDir)
+	assert.Equal(t, 1, len(ctx.Volumes))
+	assert.Equal(t, "data.txt", ctx.Volumes[0].Source)
 }
 
 func TestNewWorkspace_NoConfig(t *testing.T) {
 	repoDir, cleanup := setupTestGitRepo(t)
 	defer cleanup()
 
-	// Change to repo dir (no config file)
+	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context and load should fail
 	ctx, err := NewContext()
-	if err != nil {
-		t.Fatalf("NewContext should not fail: %v", err)
-	}
-	if err := ctx.Load("", true); err == nil {
-		t.Error("expected error when no config file exists")
-	}
+	require.NoError(t, err)
+	assert.Error(t, ctx.Load("", true))
 }
 
 func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
@@ -377,27 +335,19 @@ func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
   - "src.txt:dst.txt"
 `
 	configPath := filepath.Join(repoDir, "my-config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context with relative path
 	ctx, err := NewContext()
-	if err != nil {
-		t.Fatalf("NewContext failed: %v", err)
-	}
-	if err := ctx.Load("my-config.yaml", true); err != nil {
-		t.Fatalf("Load with relative path failed: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, ctx.Load("my-config.yaml", true))
 
-	if resolvePath(ctx.SourceDir) != repoDir {
-		t.Errorf("SourceDir = %s, want %s", ctx.SourceDir, repoDir)
-	}
+	assert.Equal(t, repoDir, resolvePath(ctx.SourceDir))
 }
 
 func TestHasGlobalVolumes(t *testing.T) {
@@ -440,9 +390,7 @@ func TestHasGlobalVolumes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &Context{Volumes: tt.volumes}
-			if got := ctx.HasGlobalVolumes(); got != tt.want {
-				t.Errorf("HasGlobalVolumes() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, ctx.HasGlobalVolumes())
 		})
 	}
 }

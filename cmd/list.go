@@ -46,11 +46,11 @@ var listCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "SOURCE\tTARGET\tMODE\tSTATUS")
+		_, _ = fmt.Fprintln(w, "SOURCE\tTARGET\tMODE\tSTATUS")
 		for _, s := range statuses {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Source, s.Target, s.Mode, s.Status)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Source, s.Target, s.Mode, s.Status)
 		}
-		w.Flush()
+		_ = w.Flush()
 		return nil
 	},
 }
