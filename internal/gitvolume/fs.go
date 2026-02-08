@@ -16,12 +16,11 @@ func copyFile(src, dst string) error {
 	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
 		return err
 	}
-
 	s, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	// Get source file info for permissions
 	srcInfo, err := os.Stat(src)
@@ -40,19 +39,19 @@ func copyFile(src, dst string) error {
 	success := false
 	defer func() {
 		if !success {
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 		}
 	}()
 
 	// Copy content
 	if _, err := io.Copy(tmpFile, s); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
 
 	// Sync to ensure data is written to disk
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
 
@@ -71,7 +70,7 @@ func copyFile(src, dst string) error {
 		if err := copyFileContent(tmpPath, dst); err != nil {
 			return fmt.Errorf("rename failed and fallback copy also failed: %w", err)
 		}
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 	}
 
 	success = true
@@ -84,7 +83,7 @@ func copyFileContent(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -95,7 +94,7 @@ func copyFileContent(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	if _, err := io.Copy(d, s); err != nil {
 		return err
@@ -145,7 +144,7 @@ func hashFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

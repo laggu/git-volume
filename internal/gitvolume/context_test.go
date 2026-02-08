@@ -165,11 +165,11 @@ volumes:
 			// Write temp file
 			tmpFile, err := os.CreateTemp("", "git-volume-test-*.yaml")
 			require.NoError(t, err)
-			defer os.Remove(tmpFile.Name())
+			defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 			_, err = tmpFile.WriteString(tt.yamlData)
 			require.NoError(t, err)
-			tmpFile.Close()
+			_ = tmpFile.Close()
 
 			// Run loadConfig
 			cfg, err := loadConfig(tmpFile.Name(), true)
@@ -218,10 +218,7 @@ func setupTestGitRepo(t *testing.T) (repoDir string, cleanup func()) {
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tmpDir
 	err = cmd.Run()
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatal("failed to init git repo:", err)
-	}
+	require.NoError(t, err, "failed to init git repo")
 
 	// Configure git user for commits
 	cmd = exec.Command("git", "config", "user.email", "test@test.com")
@@ -244,7 +241,7 @@ func setupTestGitRepo(t *testing.T) (repoDir string, cleanup func()) {
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
 
-	cleanup = func() { os.RemoveAll(tmpDir) }
+	cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	return tmpDir, cleanup
 }
 
@@ -260,21 +257,15 @@ func TestNewWorkspace_LocalConfig(t *testing.T) {
   - "source.txt:target.txt"
 `
 	configPath := filepath.Join(repoDir, ConfigFileName)
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	// Create source file
-	if err := os.WriteFile(filepath.Join(repoDir, "source.txt"), []byte("content"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "source.txt"), []byte("content"), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
 	defer func() { _ = os.Chdir(oldDir) }()
-	if err := os.Chdir(repoDir); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context and load config
 	ctx, err := NewContext()
@@ -292,28 +283,20 @@ func TestNewWorkspace_CustomPath(t *testing.T) {
 
 	// Create config file in subdirectory
 	customDir := filepath.Join(repoDir, "configs")
-	if err := os.Mkdir(customDir, 0755); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Mkdir(customDir, 0755))
 	configContent := `volumes:
   - "data.txt:output.txt"
 `
 	customConfigPath := filepath.Join(customDir, "custom.yaml")
-	if err := os.WriteFile(customConfigPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(customConfigPath, []byte(configContent), 0644))
 
 	// Create source file
-	if err := os.WriteFile(filepath.Join(customDir, "data.txt"), []byte("data"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(customDir, "data.txt"), []byte("data"), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
 	defer func() { _ = os.Chdir(oldDir) }()
-	if err := os.Chdir(repoDir); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context with custom path
 	ctx, err := NewContext()
@@ -329,10 +312,10 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	repoDir, cleanup := setupTestGitRepo(t)
 	defer cleanup()
 
-	// Change to repo dir (no config file)
+	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context and load should fail
 	ctx, err := NewContext()
@@ -352,14 +335,12 @@ func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
   - "src.txt:dst.txt"
 `
 	configPath := filepath.Join(repoDir, "my-config.yaml")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	// Change to repo dir
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(repoDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
 
 	// Create context with relative path
 	ctx, err := NewContext()
