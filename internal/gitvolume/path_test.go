@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVerifyPathWithinBase(t *testing.T) {
@@ -15,15 +17,21 @@ func TestVerifyPathWithinBase(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	base := filepath.Join(tmpDir, "workspace")
-	os.MkdirAll(base, 0755)
+	if err := os.MkdirAll(base, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create a subdirectory
 	subDir := filepath.Join(base, "subdir")
-	os.MkdirAll(subDir, 0755)
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create an external directory (outside base)
 	externalDir := filepath.Join(tmpDir, "external")
-	os.MkdirAll(externalDir, 0755)
+	if err := os.MkdirAll(externalDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name    string
@@ -55,7 +63,9 @@ func TestVerifyPathWithinBase(t *testing.T) {
 			name: "symlink within base pointing inside base",
 			setup: func() string {
 				linkPath := filepath.Join(base, "valid-link")
-				os.Symlink(subDir, linkPath)
+				if err := os.Symlink(subDir, linkPath); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
 				return filepath.Join(linkPath, "file.txt")
 			},
 			wantErr: false,
@@ -64,7 +74,9 @@ func TestVerifyPathWithinBase(t *testing.T) {
 			name: "symlink pointing outside base - direct",
 			setup: func() string {
 				linkPath := filepath.Join(base, "malicious-link")
-				os.Symlink(externalDir, linkPath)
+				if err := os.Symlink(externalDir, linkPath); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
 				return filepath.Join(linkPath, "file.txt")
 			},
 			wantErr: true,
@@ -74,7 +86,9 @@ func TestVerifyPathWithinBase(t *testing.T) {
 			setup: func() string {
 				// This is the specific attack vector from the security review
 				linkPath := filepath.Join(base, "attack-link")
-				os.Symlink(externalDir, linkPath)
+				if err := os.Symlink(externalDir, linkPath); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
 				// The "config/settings" part doesn't exist, but the symlink does
 				return filepath.Join(linkPath, "config", "settings", "file.txt")
 			},
@@ -85,9 +99,13 @@ func TestVerifyPathWithinBase(t *testing.T) {
 			setup: func() string {
 				// Create a chain: base/link1 -> base/link2 -> external
 				link2 := filepath.Join(base, "link2")
-				os.Symlink(externalDir, link2)
+				if err := os.Symlink(externalDir, link2); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
 				link1 := filepath.Join(base, "link1")
-				os.Symlink(link2, link1)
+				if err := os.Symlink(link2, link1); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
 				return filepath.Join(link1, "file.txt")
 			},
 			wantErr: true,
@@ -105,8 +123,10 @@ func TestVerifyPathWithinBase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := tt.setup()
 			err := verifyPathWithinBase(path, base)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("verifyPathWithinBase() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -141,9 +161,7 @@ func TestVerifyPathWithinBase_SymlinkAttack(t *testing.T) {
 	targetPath := filepath.Join(maliciousLink, "config", "settings", "file.txt")
 
 	err = verifyPathWithinBase(targetPath, workspace)
-	if err == nil {
-		t.Error("verifyPathWithinBase() should have detected symlink escape attack, but returned nil")
-	}
+	assert.Error(t, err, "verifyPathWithinBase() should have detected symlink escape attack")
 
 	// Verify the error message is informative
 	t.Logf("Correctly detected attack with error: %v", err)
@@ -190,9 +208,7 @@ func TestPathsEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pathsEqual(tt.path1, tt.path2); got != tt.want {
-				t.Errorf("pathsEqual() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, pathsEqual(tt.path1, tt.path2))
 		})
 	}
 }
