@@ -58,13 +58,12 @@ git volume list
 
 ## 📖 Commands
 
-| Command                                   | Description                                              |
-| ----------------------------------------- | -------------------------------------------------------- |
-| `git volume init`                         | Create global directory and sample configuration file    |
-| `git volume sync`                         | Mount volumes to current worktree based on configuration |
-| `git volume unsync`                       | Remove mounted volumes (modified files are preserved)    |
-| `git volume list`                         | Display current volume status                            |
-| `git volume worktree add <path> <branch>` | Create worktree + automatic sync                         |
+| Command             | Description                                              |
+| ------------------- | -------------------------------------------------------- |
+| `git volume init`   | Create global directory and sample configuration file    |
+| `git volume sync`   | Mount volumes to current worktree based on configuration |
+| `git volume unsync` | Remove mounted volumes (modified files are preserved)    |
+| `git volume list`   | Display current volume status                            |
 
 ## ⚙️ Configuration File (`git-volume.yaml`)
 
