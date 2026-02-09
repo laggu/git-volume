@@ -1,0 +1,183 @@
+# git-volume Command Specification
+
+`git-volume` is a tool for centrally managing and dynamically mounting environment configuration files (like `.env` or `secrets`) in Git Worktree environments.
+
+## 1. init
+
+### Purpose
+Initializes `git-volume` in the current directory.
+- Creates the global configuration directory (`~/.git-volume`) if it does not exist.
+- Generates a sample `git-volume.yaml` configuration file in the current directory.
+
+### Usage
+```bash
+git volume init [flags]
+```
+
+### Flags
+- `-h, --help`: help for init
+- `-q, --quiet`: suppress all output except errors
+
+### Example
+```bash
+# Basic initialization
+git volume init
+
+# Run quietly
+git volume init -q
+```
+
+---
+
+## 2. sync
+
+### Purpose
+Mounts volumes to the current Worktree according to the `git-volume.yaml` configuration.
+- Searches for settings in the current directory; if not found, traverses parent directories (towards the Git Common Dir) to inherit settings.
+- Mounts files/directories according to the configured mode (`link` or `copy`).
+
+### Usage
+```bash
+git volume sync [flags]
+```
+
+### Flags
+- `--dry-run`: show what would be done without making actual changes
+- `--relative`: create relative symbolic links instead of absolute ones
+- `-v, --verbose`: verbose output
+- `-c, --config string`: manually specify config file path (default: auto-detected)
+
+### Example
+```bash
+# Basic sync
+git volume sync
+
+# Preview changes
+git volume sync --dry-run
+```
+
+---
+
+## 3. unsync
+
+### Purpose
+Removes symbolic links or copied files created by the `sync` command.
+- **Safety Mechanism**: If a file mounted in `copy` mode has been modified, deletion is skipped to prevent data loss.
+
+### Usage
+```bash
+git volume unsync [flags]
+```
+
+### Flags
+- `--dry-run`: show what would be removed without actually deleting
+- `-v, --verbose`: verbose output
+
+### Example
+```bash
+# Unmount
+git volume unsync
+
+# Check files to be deleted
+git volume unsync --dry-run
+```
+
+---
+
+## 4. status
+
+### Purpose
+Displays a list of the status of currently configured volumes.
+- Shows Source, Target, Mode (Link/Copy), and Status.
+- Status types: `Synced`, `Unsynced`, `Modified`, `Missing`
+
+### Usage
+```bash
+git volume status [flags]
+```
+
+### Flags
+- `-c, --config string`: specify configuration file path
+- (Note: The `status` command displays detailed information by default, which can be suppressed with the `-q` flag. The `-v` flag has no separate effect.)
+
+### Example
+```bash
+# Check status
+git volume status
+
+# Check status with verbose output info
+git volume status -v
+```
+
+---
+
+## 5. global
+
+A group of commands for managing files in the global directory (`~/.git-volume`).
+
+### 5.1 global add
+
+#### Purpose
+Copies and registers the specified file to the global storage.
+
+#### Usage
+```bash
+git volume global add [source_file]
+```
+
+#### Example
+```bash
+# Register .env file to global storage
+git volume global add .env
+```
+
+### 5.2 global remove
+
+#### Purpose
+Deletes a file registered in the global storage.
+
+#### Usage
+```bash
+git volume global remove [target_name]
+```
+
+#### Example
+```bash
+# Delete dev.env from global storage
+git volume global remove dev.env
+```
+
+### 5.3 global list
+
+#### Purpose
+Shows a list of all files registered in the global storage.
+
+#### Usage
+```bash
+git volume global list
+```
+
+### 5.4 global edit
+
+#### Purpose
+Opens a file in global storage with the default editor (`$EDITOR`).
+
+#### Usage
+```bash
+git volume global edit [target_name]
+```
+
+#### Example
+```bash
+# Edit dev.env in global storage
+git volume global edit dev.env
+```
+
+---
+
+## Global Flags
+Flags available for all commands.
+
+- `-c, --config`: specify config file path
+- `-v, --verbose`: verbose output mode
+- `-q, --quiet`: suppress output except errors
