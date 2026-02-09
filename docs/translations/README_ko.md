@@ -1,4 +1,4 @@
-> 🌐 [English](../../README.md)
+> 🌐 [English](../../README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | [Español](README_es.md) | [Português](README_pt.md) | [Français](README_fr.md) | [Deutsch](README_de.md) | [Italiano](README_it.md)
 
 # git-volume
 
@@ -53,7 +53,7 @@ git volume sync
 
 **4. 상태 확인**
 ```bash
-git volume list
+git volume status
 ```
 
 ## 📖 명령어
@@ -63,7 +63,7 @@ git volume list
 | `git volume init`   | 글로벌 디렉토리 생성 및 샘플 설정 파일 생성 |
 | `git volume sync`   | 설정에 따라 볼륨을 현재 워크트리에 마운트   |
 | `git volume unsync` | 마운트된 볼륨 제거 (수정된 파일은 보존)     |
-| `git volume list`   | 현재 볼륨 상태 표시                         |
+| `git volume status` | 현재 볼륨 상태 표시                         |
 
 ## ⚙️ 설정 파일 (`git-volume.yaml`)
 

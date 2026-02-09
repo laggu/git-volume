@@ -1,4 +1,4 @@
-> 🌐 [한국어](docs/ko/README.md)
+> 🌐 [한국어](docs/translations/README_ko.md) | [日本語](docs/translations/README_ja.md) | [中文](docs/translations/README_zh.md) | [Español](docs/translations/README_es.md) | [Português](docs/translations/README_pt.md) | [Français](docs/translations/README_fr.md) | [Deutsch](docs/translations/README_de.md) | [Italiano](docs/translations/README_it.md)
 
 # git-volume
 
@@ -53,7 +53,7 @@ git volume sync
 
 **4. Check Status**
 ```bash
-git volume list
+git volume status
 ```
 
 ## 📖 Commands
@@ -63,7 +63,7 @@ git volume list
 | `git volume init`   | Create global directory and sample configuration file    |
 | `git volume sync`   | Mount volumes to current worktree based on configuration |
 | `git volume unsync` | Remove mounted volumes (modified files are preserved)    |
-| `git volume list`   | Display current volume status                            |
+| `git volume status` | Display current volume status                            |
 
 ## ⚙️ Configuration File (`git-volume.yaml`)
 
