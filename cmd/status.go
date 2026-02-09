@@ -40,7 +40,7 @@ var statusCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		statuses, err := gv.List()
+		statuses, err := gv.Status()
 		if err != nil {
 			return err
 		}

@@ -30,7 +30,7 @@ func New(opts Options) (*GitVolume, error) {
 }
 
 // Load loads configuration from the config file.
-// Must be called before Sync, Unsync, or List operations.
+// Must be called before Sync, Unsync, or Status operations.
 func (g *GitVolume) Load() error {
 	return g.ctx.Load(g.configPath, g.quiet)
 }
