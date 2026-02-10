@@ -13,10 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:          "list",
-	Short:        "Lists all volumes and their status",
+// statusCmd represents the status command
+var statusCmd = &cobra.Command{
+	Use:          "status",
+	Short:        "Show the status of all volumes",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gv, err := gitvolume.New(gitvolume.Options{
@@ -40,7 +40,7 @@ var listCmd = &cobra.Command{
 			fmt.Println()
 		}
 
-		statuses, err := gv.List()
+		statuses, err := gv.Status()
 		if err != nil {
 			return err
 		}
@@ -56,5 +56,5 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(statusCmd)
 }

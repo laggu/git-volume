@@ -449,7 +449,7 @@ func TestGitVolume_Unsync_GlobalSource_EmptyGlobalBase(t *testing.T) {
 	assert.Contains(t, err.Error(), "global directory not configured")
 }
 
-func TestGitVolume_List(t *testing.T) {
+func TestGitVolume_Status(t *testing.T) {
 	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
 	defer cleanup()
 
@@ -461,7 +461,7 @@ func TestGitVolume_List(t *testing.T) {
 	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
 
 	// Before sync
-	statuses, err := gv.List()
+	statuses, err := gv.Status()
 	require.NoError(t, err)
 	assert.Equal(t, 3, len(statuses))
 
@@ -477,7 +477,7 @@ func TestGitVolume_List(t *testing.T) {
 	require.NoError(t, gv.Sync(SyncOptions{}))
 
 	// After sync
-	statuses, _ = gv.List()
+	statuses, _ = gv.Status()
 	assert.Equal(t, StatusOKLinked, statuses[0].Status)
 	assert.Equal(t, StatusOKLinked, statuses[1].Status)
 
