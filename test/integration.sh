@@ -2,14 +2,15 @@
 set -eo pipefail
 
 # Configuration
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 TEST_DIR=$(mktemp -d)
-GV_BIN="$(pwd)/git-volume"
+GV_BIN="${PROJECT_ROOT}/git-volume"
 FAILED=0
 
 # Compile git-volume if not present
 if [ ! -f "$GV_BIN" ]; then
     echo "🔨 Building git-volume..."
-    go build -o git-volume main.go
+    (cd "$PROJECT_ROOT" && go build -o "$GV_BIN" .)
 fi
 
 # Helper Functions
@@ -100,7 +101,7 @@ else
 fi
 
 # Run Status
-OUTPUT=$("$GV_BIN" status)
+OUTPUT="$("$GV_BIN" status)"
 if grep -q "target_link.txt" <<< "$OUTPUT" && \
    grep -q "target_copy.txt" <<< "$OUTPUT" && \
    grep -q "OK" <<< "$OUTPUT"; then
