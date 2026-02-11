@@ -1,20 +1,15 @@
 #!/bin/bash
+set -eo pipefail
 
 # Configuration
 TEST_DIR=$(mktemp -d)
-GV_BIN="$PWD/git-volume"
+GV_BIN="$(pwd)/git-volume"
 FAILED=0
 
 # Compile git-volume if not present
 if [ ! -f "$GV_BIN" ]; then
     echo "🔨 Building git-volume..."
     go build -o git-volume main.go
-    if [ $? -ne 0 ]; then
-        echo "❌ Build failed"
-        exit 1
-    fi
-     # Use absolute path for GV_BIN
-    GV_BIN="$(pwd)/git-volume"
 fi
 
 # Helper Functions
@@ -46,9 +41,9 @@ log "SETUP" "Test directory: $TEST_DIR"
 # Test: init
 # -----------------------------------------------------------------------------
 log "TEST" "Testing 'init' command..."
-cd "$TEST_DIR" || exit 1
+cd "$TEST_DIR"
 mkdir project
-cd project || exit 1
+cd project
 
 # Initialize git repository (required for git-volume)
 git init -q
@@ -106,9 +101,9 @@ fi
 
 # Run Status
 OUTPUT=$("$GV_BIN" status)
-if echo "$OUTPUT" | grep -q "target_link.txt" && \
-   echo "$OUTPUT" | grep -q "target_copy.txt" && \
-   echo "$OUTPUT" | grep -q "OK"; then
+if grep -q "target_link.txt" <<< "$OUTPUT" && \
+   grep -q "target_copy.txt" <<< "$OUTPUT" && \
+   grep -q "OK" <<< "$OUTPUT"; then
     pass "status confirmed volumes are mounted"
 else
     fail "status output incorrect or missing volumes"
