@@ -8,7 +8,7 @@ GV_BIN="${PROJECT_ROOT}/git-volume"
 FAILED=0
 
 # Compile git-volume if not present
-if [ ! -f "$GV_BIN" ]; then
+if [[ ! -f "$GV_BIN" ]]; then
     echo "🔨 Building git-volume..."
     (cd "$PROJECT_ROOT" && go build -o "$GV_BIN" .)
 fi
@@ -50,7 +50,7 @@ cd project
 git init -q
 
 "$GV_BIN" init -q
-if [ -d "$TEST_DIR/.git-volume" ] && [ -f "git-volume.yaml" ]; then
+if [[ -d "$TEST_DIR/.git-volume" && -f "git-volume.yaml" ]]; then
     pass "init created necessary files"
 else
     fail "init failed to create files"
@@ -77,9 +77,9 @@ EOF
 "$GV_BIN" sync
 
 # Verify Link
-if [ -L "target_link.txt" ]; then
+if [[ -L "target_link.txt" ]]; then
     CONTENT=$(cat target_link.txt)
-    if [ "$CONTENT" == "SECRET_DATA" ]; then
+    if [[ "$CONTENT" == "SECRET_DATA" ]]; then
         pass "sync created symlink correctly"
     else
         fail "symlink content mismatch"
@@ -89,9 +89,9 @@ else
 fi
 
 # Verify Copy
-if [ -f "target_copy.txt" ] && [ ! -L "target_copy.txt" ]; then
+if [[ -f "target_copy.txt" && ! -L "target_copy.txt" ]]; then
     CONTENT=$(cat target_copy.txt)
-    if [ "$CONTENT" == "SECRET_DATA" ]; then
+    if [[ "$CONTENT" == "SECRET_DATA" ]]; then
         pass "sync created copy correctly"
     else
         fail "copy content mismatch"
@@ -102,9 +102,8 @@ fi
 
 # Run Status
 OUTPUT="$("$GV_BIN" status)"
-if grep -q "target_link.txt" <<< "$OUTPUT" && \
-   grep -q "target_copy.txt" <<< "$OUTPUT" && \
-   grep -q "OK" <<< "$OUTPUT"; then
+if grep -q "target_link.txt.*OK" <<< "$OUTPUT" && \
+   grep -q "target_copy.txt.*OK" <<< "$OUTPUT"; then
     pass "status confirmed volumes are mounted"
 else
     fail "status output incorrect or missing volumes"
@@ -118,13 +117,13 @@ log "TEST" "Testing 'unsync'..."
 
 "$GV_BIN" unsync
 
-if [ ! -e "target_link.txt" ]; then
+if [[ ! -e "target_link.txt" ]]; then
     pass "unsync removed symlink"
 else
     fail "unsync failed to remove symlink"
 fi
 
-if [ ! -e "target_copy.txt" ]; then
+if [[ ! -e "target_copy.txt" ]]; then
     pass "unsync removed copy"
 else
     fail "unsync failed to remove copy"
@@ -144,9 +143,9 @@ echo "MODIFIED_DATA" > target_copy.txt
 # Unsync
 "$GV_BIN" unsync
 
-if [ -f "target_copy.txt" ]; then
+if [[ -f "target_copy.txt" ]]; then
     CONTENT=$(cat target_copy.txt)
-    if [ "$CONTENT" == "MODIFIED_DATA" ]; then
+    if [[ "$CONTENT" == "MODIFIED_DATA" ]]; then
         pass "unsync preserved modified file"
     else
         fail "unsync modified file content changed"
@@ -168,7 +167,7 @@ echo "GLOBAL_SECRET" > global_source.txt
 
 # Global Add
 "$GV_BIN" add global_source.txt
-if [ -f "$TEST_DIR/.git-volume/global_source.txt" ]; then
+if [[ -f "$TEST_DIR/.git-volume/global_source.txt" ]]; then
     pass "add command copied file to global dir"
 else
     fail "add command failed to copy file"
@@ -178,7 +177,7 @@ fi
 # Summary
 # -----------------------------------------------------------------------------
 echo ""
-if [ $FAILED -eq 0 ]; then
+if [[ $FAILED -eq 0 ]]; then
     echo "🎉 All tests passed!"
     exit 0
 else
