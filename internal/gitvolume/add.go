@@ -94,6 +94,25 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 	displayDst := "@global/" + targetSubPath
 
 	// Security: ensure the final destination path is within the global directory
+	// valid path check using EvalSymlinks to prevent symlink traversal
+	finalDstPath, err := filepath.EvalSymlinks(filepath.Dir(dstPath))
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to evaluate symlinks for %s: %w", dstPath, err)
+	}
+	if err == nil {
+		// If directory exists, check if the resolved path is within globalDir
+		// We also need to evaluate globalDir to compare real paths
+		realGlobalDir, err := filepath.EvalSymlinks(globalDir)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate global dir symlinks: %w", err)
+		}
+
+		// Check if finalDstPath is within realGlobalDir
+		if !strings.HasPrefix(finalDstPath, realGlobalDir) {
+			return fmt.Errorf("security error: destination path %q resolves to %q which is outside global directory", targetSubPath, finalDstPath)
+		}
+	}
+
 	if err := verifyPathWithinBase(dstPath, globalDir); err != nil {
 		return fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
 	}

@@ -93,4 +93,19 @@ func TestGlobalAdd(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "source does not exist")
 	})
+
+	t.Run("Security: Block symlink traversal", func(t *testing.T) {
+		// Create a symlink in global dir pointing outside
+		outsideDir := t.TempDir()
+		symlinkDir := filepath.Join(globalDir, "symlink_dir")
+		err := os.Symlink(outsideDir, symlinkDir)
+		require.NoError(t, err)
+
+		// Try to add a file into that symlinked directory using --path
+		// This should fail because it resolves to outsideDir
+		err = gv.GlobalAdd([]string{file1}, AddOptions{Path: "symlink_dir"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "security error")
+		assert.Contains(t, err.Error(), "outside global directory")
+	})
 }
