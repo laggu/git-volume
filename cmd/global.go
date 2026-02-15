@@ -6,8 +6,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
+
+	"github.com/laggu/git-volume/internal/gitvolume"
 )
 
 // globalCmd represents the global command
@@ -20,9 +21,10 @@ These files can be mounted in any project using the @global/ prefix.`,
 
 // globalListCmd represents the global list command
 var globalListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List files in global storage",
-	Long:  `Displays a tree of all files currently stored in the global git-volume directory.`,
+	Use:          "list",
+	Short:        "List files in global storage",
+	Long:         `Displays a tree of all files currently stored in the global git-volume directory.`,
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		gv, err := gitvolume.New(gitvolume.Options{Quiet: quiet})
 		if err != nil {

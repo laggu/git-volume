@@ -71,23 +71,27 @@ func (g *GitVolume) buildGlobalTree(globalDir string) (*treeNode, error) {
 		return nil, err
 	}
 
-	sort.Strings(files)
+	// Optimization: Use a map to track nodes at each level for O(1) lookup
+	// The tree building logic doesn't strictly need sorted input, so we skip initial sort.
+
+	// Helper map to quickly find nodes by their full path
+	nodeMap := make(map[string]*treeNode)
+	nodeMap["."] = root
 
 	for _, file := range files {
 		parts := strings.Split(filepath.ToSlash(file), "/")
 		current := root
+		currentPath := "."
+
 		for i, part := range parts {
 			isLeaf := i == len(parts)-1
-			var child *treeNode
-			for _, c := range current.children {
-				if c.name == part {
-					child = c
-					break
-				}
-			}
-			if child == nil {
+			currentPath = currentPath + "/" + part
+
+			child, exists := nodeMap[currentPath]
+			if !exists {
 				child = &treeNode{name: part, isDir: !isLeaf}
 				current.children = append(current.children, child)
+				nodeMap[currentPath] = child
 			}
 			current = child
 		}
