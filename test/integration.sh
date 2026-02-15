@@ -189,17 +189,17 @@ git worktree remove ../feat-1 --force >/dev/null 2>&1
 # -----------------------------------------------------------------------------
 # Test: global commands (add)
 # -----------------------------------------------------------------------------
-log "TEST" "Testing 'add' (global) command..."
+log "TEST" "Testing 'global add' command..."
 
 # Create dummy global source file
 echo "GLOBAL_SECRET" > global_source.txt
 
 # Global Add
-"$GV_BIN" add global_source.txt
+"$GV_BIN" global add global_source.txt
 if [[ -f "$TEST_DIR/.git-volume/global_source.txt" ]]; then
-    pass "add command copied file to global dir"
+    pass "global add command copied file to global dir"
 else
-    fail "add command failed to copy file"
+    fail "global add command failed to copy file"
 fi
 
 # -----------------------------------------------------------------------------

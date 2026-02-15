@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-// AddOptions configures the Add operation
+// AddOptions configures the GlobalAdd operation
 type AddOptions struct {
 	Force bool   // Overwrite existing files in global directory
 	As    string // Save as specific path/name (single file only)
 	Path  string // Save to subdirectory within global directory
 }
 
-// Add copies files to the global git-volume directory
-func (g *GitVolume) Add(files []string, opts AddOptions) error {
+// GlobalAdd copies files to the global git-volume directory
+func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	// Validate: --as can only be used with single file
 	if opts.As != "" && len(files) > 1 {
 		return fmt.Errorf("--as can only be used with a single file")
