@@ -73,6 +73,10 @@ volumes:
     mode: copy
 EOF
 
+# Commit config so it exists in worktrees
+git add git-volume.yaml >/dev/null 2>&1
+git commit -m "Add git-volume config" >/dev/null 2>&1
+
 # Run Sync
 "$GV_BIN" sync
 
@@ -158,6 +162,31 @@ fi
 rm -f target_copy.txt
 
 # -----------------------------------------------------------------------------
+# Test: Worktree Inheritance
+# -----------------------------------------------------------------------------
+log "TEST" "Testing 'Worktree Inheritance'..."
+
+# Create a worktree WITHOUT git-volume.yaml inside it
+git worktree add ../feat-1 -b feat-1 >/dev/null 2>&1
+pushd ../feat-1 >/dev/null
+
+# Since we committed git-volume.yaml, it exists here. Remove it to test inheritance.
+rm git-volume.yaml
+
+# Run sync in worktree (expecting inheritance)
+"$GV_BIN" sync >/dev/null 2>&1
+
+if [[ -L "target_link.txt" ]]; then
+    pass "inheritance worked! symlink created in worktree"
+else
+    fail "inheritance failed"
+fi
+
+popd >/dev/null
+# Cleanup worktree
+git worktree remove ../feat-1 --force >/dev/null 2>&1
+
+# -----------------------------------------------------------------------------
 # Test: global commands (add)
 # -----------------------------------------------------------------------------
 log "TEST" "Testing 'add' (global) command..."
@@ -171,6 +200,37 @@ if [[ -f "$TEST_DIR/.git-volume/global_source.txt" ]]; then
     pass "add command copied file to global dir"
 else
     fail "add command failed to copy file"
+fi
+
+# -----------------------------------------------------------------------------
+# Test: global list
+# -----------------------------------------------------------------------------
+log "TEST" "Testing 'global list' command..."
+
+# Setup more global files for tree test
+mkdir -p "$TEST_DIR/.git-volume/secrets/prod"
+echo "API_KEY" > "$TEST_DIR/.git-volume/secrets/api.key"
+echo "DB_PASS" > "$TEST_DIR/.git-volume/secrets/prod/db.key"
+
+# Run global list
+OUTPUT="$("$GV_BIN" global list)"
+
+# Verify output contains expected files
+if grep -q "secrets" <<< "$OUTPUT" && \
+   grep -q "api.key" <<< "$OUTPUT" && \
+   grep -q "db.key" <<< "$OUTPUT" && \
+   grep -q "global_source.txt" <<< "$OUTPUT"; then
+    pass "global list shows all files"
+else
+    fail "global list missing files"
+    echo "Output: $OUTPUT"
+fi
+
+# Verify tree structure
+if grep -q "├──" <<< "$OUTPUT" || grep -q "└──" <<< "$OUTPUT"; then
+    pass "global list uses tree-style output"
+else
+    fail "global list missing tree connectors"
 fi
 
 # -----------------------------------------------------------------------------
