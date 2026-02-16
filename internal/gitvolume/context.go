@@ -224,6 +224,7 @@ type VolumeStatus struct {
 const (
 	StatusOKLinked      = "OK (Linked)"
 	StatusOKCopied      = "OK (Copied)"
+	StatusModified      = "MODIFIED"
 	StatusNotMounted    = "NOT MOUNTED"
 	StatusMissingSource = "MISSING (Source)"
 	StatusWrongLink     = "WRONG LINK"
@@ -271,7 +272,33 @@ func (v *Volume) CheckStatus() VolumeStatus {
 	}
 
 	// Copy Mode
+	srcInfo, err := os.Stat(v.SourcePath)
+	if err != nil {
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
+	}
+
+	if srcInfo.IsDir() {
+		if !info.IsDir() {
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusExistsNotFile}
+		}
+		match, err := verifyDirHash(v.SourcePath, v.TargetPath)
+		if err != nil {
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
+		}
+		if !match {
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusModified}
+		}
+		return VolumeStatus{displaySource, v.Target, v.Mode, StatusOKCopied}
+	}
+
 	if info.Mode().IsRegular() {
+		match, err := verifyHash(v.SourcePath, v.TargetPath)
+		if err != nil {
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
+		}
+		if !match {
+			return VolumeStatus{displaySource, v.Target, v.Mode, StatusModified}
+		}
 		return VolumeStatus{displaySource, v.Target, v.Mode, StatusOKCopied}
 	}
 	return VolumeStatus{displaySource, v.Target, v.Mode, StatusExistsNotFile}

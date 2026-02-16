@@ -4,8 +4,6 @@ Copyright © 2026 laggu
 package cmd
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -27,11 +25,8 @@ by dynamically mounting them using a git-volume.yaml manifest.
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
-	}
+func Execute() error {
+	return rootCmd.Execute()
 }
 
 func init() {

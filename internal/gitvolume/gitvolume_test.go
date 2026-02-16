@@ -110,6 +110,80 @@ func TestGitVolume_Sync_Copy(t *testing.T) {
 	assert.Equal(t, "content2", string(data), "copy content mismatch")
 }
 
+func TestGitVolume_Sync_CopyDirectory(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}), "Sync failed")
+
+	dstFile := filepath.Join(targetDir, "config", "app.env")
+	data, err := os.ReadFile(dstFile)
+	require.NoError(t, err)
+	assert.Equal(t, "A=1", string(data))
+}
+
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetMergesWithoutOverwriteWhenNotForce(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "new.env"), []byte("NEW"), 0644))
+
+	targetConfigDir := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "OLD", string(data))
+
+	newData, newReadErr := os.ReadFile(filepath.Join(targetDir, "config", "new.env"))
+	require.NoError(t, newReadErr)
+	assert.Equal(t, "NEW", string(newData))
+}
+
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwritesWhenForce(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	targetConfigDir := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy, Force: true},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "A=1", string(data))
+}
+
 func TestGitVolume_Unsync(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
@@ -483,4 +557,31 @@ func TestGitVolume_Status(t *testing.T) {
 
 	// Check display source for global
 	assert.Equal(t, "@global/global.txt", statuses[1].Source)
+}
+
+func TestGitVolume_Status_CopyDirectoryModified(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	statuses, err := gv.Status()
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(statuses))
+	assert.Equal(t, StatusOKCopied, statuses[0].Status)
+
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "config", "app.env"), []byte("A=2"), 0644))
+
+	statuses, err = gv.Status()
+	require.NoError(t, err)
+	assert.Equal(t, StatusModified, statuses[0].Status)
 }

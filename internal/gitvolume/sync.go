@@ -88,6 +88,23 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 
 // syncCopy handles copy mode synchronization
 func (g *GitVolume) syncCopy(src, dst string, force bool) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if srcInfo.IsDir() {
+		if dstInfo, err := os.Lstat(dst); err == nil {
+			if !dstInfo.IsDir() {
+				return fmt.Errorf("target exists and is not a directory")
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+
+		return copyDirNoSymlinkWithForce(src, dst, force)
+	}
+
 	// Check exist
 	if info, err := os.Stat(dst); err == nil {
 		if !info.Mode().IsRegular() {

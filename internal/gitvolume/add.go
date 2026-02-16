@@ -55,13 +55,18 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 
 // addFile copies a single file or directory to the global directory
 func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
-	// Check if source exists
-	srcInfo, err := os.Stat(file)
+	// Check if source exists (use Lstat to detect symlinks)
+	srcInfo, err := os.Lstat(file)
 	if os.IsNotExist(err) {
 		return fmt.Errorf("source does not exist: %s", file)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to stat source %s: %w", file, err)
+	}
+
+	// Reject symlink sources for security
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("source is a symlink, which is not allowed for security reasons: %s", file)
 	}
 
 	// Only allow regular files and directories
@@ -99,7 +104,7 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 	}
 
 	// Check if destination exists and validate type compatibility
-	if dstInfo, err := os.Stat(dstPath); err == nil {
+	if dstInfo, err := os.Lstat(dstPath); err == nil {
 		// Check type compatibility: source and destination must be same type
 		if srcInfo.IsDir() && !dstInfo.IsDir() {
 			return fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
@@ -116,7 +121,7 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 
 	// Copy file or directory
 	if srcInfo.IsDir() {
-		if err := copyDir(srcAbs, dstPath); err != nil {
+		if err := copyDirNoSymlink(srcAbs, dstPath); err != nil {
 			return fmt.Errorf("failed to copy directory %s: %w", file, err)
 		}
 	} else {
