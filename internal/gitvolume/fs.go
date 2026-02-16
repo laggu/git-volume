@@ -9,42 +9,8 @@ import (
 	"strings"
 )
 
-// copyFile copies a file atomically using a temporary file and rename.
-// If src is a symlink, it delegates to copySymlink.
+// copyFile copies a regular file atomically using a temporary file and rename.
 func copyFile(src, dst string) error {
-	info, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return copySymlink(src, dst)
-	}
-	return copyRegularFile(src, dst)
-}
-
-// copySymlink recreates a symlink at dst pointing to the same target as src.
-func copySymlink(src, dst string) error {
-	target, err := os.Readlink(src)
-	if err != nil {
-		return fmt.Errorf("failed to read symlink %s: %w", src, err)
-	}
-
-	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
-		return err
-	}
-
-	if _, err := os.Lstat(dst); err == nil {
-		if err := os.Remove(dst); err != nil {
-			return fmt.Errorf("failed to remove existing destination %s: %w", dst, err)
-		}
-	}
-
-	return os.Symlink(target, dst)
-}
-
-// copyRegularFile copies a regular file atomically using a temporary file and rename.
-func copyRegularFile(src, dst string) error {
 	// Ensure directory exists
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
@@ -98,53 +64,41 @@ func copyRegularFile(src, dst string) error {
 		return err
 	}
 
-	// Atomic rename (may fail on cross-filesystem)
+	// Atomic rename
 	if err := os.Rename(tmpPath, dst); err != nil {
-		if info, lErr := os.Lstat(dst); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
-			_ = os.Remove(dst)
+		dstInfo, statErr := os.Lstat(dst)
+		if statErr == nil {
+			if dstInfo.IsDir() {
+				return fmt.Errorf("failed to atomically replace destination: destination is a directory: %s", dst)
+			}
+			if dstInfo.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("failed to atomically replace destination: destination is a symlink: %s", dst)
+			}
+			if rmErr := os.Remove(dst); rmErr != nil {
+				return fmt.Errorf("failed to remove existing destination %s after rename error: %w", dst, rmErr)
+			}
+			if retryErr := os.Rename(tmpPath, dst); retryErr == nil {
+				success = true
+				return nil
+			}
 		}
-		if err := copyFileContent(tmpPath, dst); err != nil {
-			return fmt.Errorf("rename failed and fallback copy also failed: %w", err)
-		}
-		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to atomically replace destination: %w", err)
 	}
 
 	success = true
 	return nil
 }
 
-// copyFileContent copies file content (used as fallback for cross-filesystem rename)
-func copyFileContent(src, dst string) error {
-	s, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = s.Close() }()
-
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	d, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
-	if err != nil {
-		return err
-	}
-	defer func() { _ = d.Close() }()
-
-	if _, err := io.Copy(d, s); err != nil {
-		return err
-	}
-
-	return d.Sync()
-}
-
 // copyDirNoSymlink recursively copies a directory after rejecting any symlink entry.
 func copyDirNoSymlink(src, dst string) error {
-	return copyDirNoSymlinkRecursive(src, dst)
+	return copyDirNoSymlinkWithForce(src, dst, true)
 }
 
-func copyDirNoSymlinkRecursive(src, dst string) error {
+func copyDirNoSymlinkWithForce(src, dst string, force bool) error {
+	return copyDirNoSymlinkRecursive(src, dst, force)
+}
+
+func copyDirNoSymlinkRecursive(src, dst string, force bool) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -175,13 +129,27 @@ func copyDirNoSymlinkRecursive(src, dst string) error {
 		}
 
 		if entryInfo.IsDir() {
-			if err := copyDirNoSymlinkRecursive(srcPath, dstPath); err != nil {
+			if dstInfo, err := os.Lstat(dstPath); err == nil && !dstInfo.IsDir() {
+				return fmt.Errorf("target exists and is not a directory: %s", dstPath)
+			} else if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+
+			if err := copyDirNoSymlinkRecursive(srcPath, dstPath, force); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if err := copyRegularFile(srcPath, dstPath); err != nil {
+		if _, err := os.Lstat(dstPath); err == nil {
+			if !force {
+				continue
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+
+		if err := copyFile(srcPath, dstPath); err != nil {
 			return err
 		}
 	}

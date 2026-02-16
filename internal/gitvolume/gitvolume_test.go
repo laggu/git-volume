@@ -131,6 +131,59 @@ func TestGitVolume_Sync_CopyDirectory(t *testing.T) {
 	assert.Equal(t, "A=1", string(data))
 }
 
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetMergesWithoutOverwriteWhenNotForce(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "new.env"), []byte("NEW"), 0644))
+
+	targetConfigDir := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "OLD", string(data))
+
+	newData, newReadErr := os.ReadFile(filepath.Join(targetDir, "config", "new.env"))
+	require.NoError(t, newReadErr)
+	assert.Equal(t, "NEW", string(newData))
+}
+
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwritesWhenForce(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	targetConfigDir := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy, Force: true},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "A=1", string(data))
+}
+
 func TestGitVolume_Unsync(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()

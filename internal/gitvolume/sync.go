@@ -98,17 +98,11 @@ func (g *GitVolume) syncCopy(src, dst string, force bool) error {
 			if !dstInfo.IsDir() {
 				return fmt.Errorf("target exists and is not a directory")
 			}
-			if !force {
-				return fmt.Errorf("target exists (use force: true to overwrite)")
-			}
-			if err := os.RemoveAll(dst); err != nil {
-				return fmt.Errorf("failed to remove existing directory %s: %w", dst, err)
-			}
 		} else if !os.IsNotExist(err) {
 			return err
 		}
 
-		return copyDirNoSymlink(src, dst)
+		return copyDirNoSymlinkWithForce(src, dst, force)
 	}
 
 	// Check exist
