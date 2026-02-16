@@ -77,10 +77,11 @@ func copyFile(src, dst string) error {
 			if rmErr := os.Remove(dst); rmErr != nil {
 				return fmt.Errorf("failed to remove existing destination %s after rename error: %w", dst, rmErr)
 			}
-			if retryErr := os.Rename(tmpPath, dst); retryErr == nil {
-				success = true
-				return nil
+			if retryErr := os.Rename(tmpPath, dst); retryErr != nil {
+				return fmt.Errorf("failed to rename after removing existing destination: %w", retryErr)
 			}
+			success = true
+			return nil
 		}
 		return fmt.Errorf("failed to atomically replace destination: %w", err)
 	}
