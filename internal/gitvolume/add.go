@@ -121,7 +121,7 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 
 	// Copy file or directory
 	if srcInfo.IsDir() {
-		if err := copyDirNoSymlink(srcAbs, dstPath); err != nil {
+		if err := copyDirNoSymlink(srcAbs, dstPath, true); err != nil {
 			return fmt.Errorf("failed to copy directory %s: %w", file, err)
 		}
 	} else {

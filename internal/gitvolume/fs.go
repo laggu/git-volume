@@ -45,16 +45,7 @@ func copyFile(src, dst string) error {
 	return dstFile.Sync()
 }
 
-// copyDirNoSymlink recursively copies a directory after rejecting any symlink entry.
-func copyDirNoSymlink(src, dst string) error {
-	return copyDirNoSymlinkWithForce(src, dst, true)
-}
-
-func copyDirNoSymlinkWithForce(src, dst string, force bool) error {
-	return copyDirNoSymlinkRecursive(src, dst, force)
-}
-
-func copyDirNoSymlinkRecursive(src, dst string, force bool) error {
+func copyDirNoSymlink(src, dst string, force bool) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -91,7 +82,7 @@ func copyDirNoSymlinkRecursive(src, dst string, force bool) error {
 				return err
 			}
 
-			if err := copyDirNoSymlinkRecursive(srcPath, dstPath, force); err != nil {
+			if err := copyDirNoSymlink(srcPath, dstPath, force); err != nil {
 				return err
 			}
 			continue
