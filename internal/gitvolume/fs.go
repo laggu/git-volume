@@ -34,15 +34,18 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = dstFile.Close() }()
 
-	// Copy content
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		_ = dstFile.Close()
 		return err
 	}
 
-	// Sync to ensure data is written to disk
-	return dstFile.Sync()
+	if err := dstFile.Sync(); err != nil {
+		_ = dstFile.Close()
+		return err
+	}
+
+	return dstFile.Close()
 }
 
 func copyDirNoSymlink(src, dst string, force bool) error {
