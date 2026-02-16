@@ -9,18 +9,20 @@ import (
 	"strings"
 )
 
-// copyFile copies a regular file atomically using a temporary file and rename.
+// copyFile copies a regular file directly to the destination.
+// If copy fails, the source file remains intact and sync can be re-run.
 func copyFile(src, dst string) error {
 	// Ensure directory exists
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
 		return err
 	}
-	s, err := os.Open(src)
+
+	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = s.Close() }()
+	defer func() { _ = srcFile.Close() }()
 
 	// Get source file info for permissions
 	srcInfo, err := os.Stat(src)
@@ -28,66 +30,19 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	// Create temporary file in the same directory for atomic rename
-	tmpFile, err := os.CreateTemp(dstDir, ".git-volume-tmp-*")
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
-	tmpPath := tmpFile.Name()
-
-	// Cleanup on failure
-	success := false
-	defer func() {
-		if !success {
-			_ = os.Remove(tmpPath)
-		}
-	}()
+	defer func() { _ = dstFile.Close() }()
 
 	// Copy content
-	if _, err := io.Copy(tmpFile, s); err != nil {
-		_ = tmpFile.Close()
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err
 	}
 
 	// Sync to ensure data is written to disk
-	if err := tmpFile.Sync(); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return err
-	}
-
-	// Copy permissions
-	if err := os.Chmod(tmpPath, srcInfo.Mode()); err != nil {
-		return err
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, dst); err != nil {
-		dstInfo, statErr := os.Lstat(dst)
-		if statErr == nil {
-			if dstInfo.IsDir() {
-				return fmt.Errorf("failed to atomically replace destination: destination is a directory: %s", dst)
-			}
-			if dstInfo.Mode()&os.ModeSymlink != 0 {
-				return fmt.Errorf("failed to atomically replace destination: destination is a symlink: %s", dst)
-			}
-			if rmErr := os.Remove(dst); rmErr != nil {
-				return fmt.Errorf("failed to remove existing destination %s after rename error: %w", dst, rmErr)
-			}
-			if retryErr := os.Rename(tmpPath, dst); retryErr != nil {
-				return fmt.Errorf("failed to rename after removing existing destination: %w", retryErr)
-			}
-			success = true
-			return nil
-		}
-		return fmt.Errorf("failed to atomically replace destination: %w", err)
-	}
-
-	success = true
-	return nil
+	return dstFile.Sync()
 }
 
 // copyDirNoSymlink recursively copies a directory after rejecting any symlink entry.
