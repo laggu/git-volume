@@ -10,7 +10,41 @@ import (
 )
 
 // copyFile copies a file atomically using a temporary file and rename.
+// If src is a symlink, it delegates to copySymlink.
 func copyFile(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return copySymlink(src, dst)
+	}
+	return copyRegularFile(src, dst)
+}
+
+// copySymlink recreates a symlink at dst pointing to the same target as src.
+func copySymlink(src, dst string) error {
+	target, err := os.Readlink(src)
+	if err != nil {
+		return fmt.Errorf("failed to read symlink %s: %w", src, err)
+	}
+
+	dstDir := filepath.Dir(dst)
+	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
+		return err
+	}
+
+	if _, err := os.Lstat(dst); err == nil {
+		if err := os.Remove(dst); err != nil {
+			return fmt.Errorf("failed to remove existing destination %s: %w", dst, err)
+		}
+	}
+
+	return os.Symlink(target, dst)
+}
+
+// copyRegularFile copies a regular file atomically using a temporary file and rename.
+func copyRegularFile(src, dst string) error {
 	// Ensure directory exists
 	dstDir := filepath.Dir(dst)
 	if err := os.MkdirAll(dstDir, DefaultDirPerm); err != nil {
@@ -66,7 +100,9 @@ func copyFile(src, dst string) error {
 
 	// Atomic rename (may fail on cross-filesystem)
 	if err := os.Rename(tmpPath, dst); err != nil {
-		// Fallback: copy and delete for cross-filesystem
+		if info, lErr := os.Lstat(dst); lErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			_ = os.Remove(dst)
+		}
 		if err := copyFileContent(tmpPath, dst); err != nil {
 			return fmt.Errorf("rename failed and fallback copy also failed: %w", err)
 		}
@@ -103,14 +139,20 @@ func copyFileContent(src, dst string) error {
 	return d.Sync()
 }
 
-// copyDir recursively copies a directory
-func copyDir(src, dst string) error {
-	srcInfo, err := os.Stat(src)
+// copyDirNoSymlink recursively copies a directory after rejecting any symlink entry.
+func copyDirNoSymlink(src, dst string) error {
+	return copyDirNoSymlinkRecursive(src, dst)
+}
+
+func copyDirNoSymlinkRecursive(src, dst string) error {
+	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", src)
+	}
 
-	// Create destination directory with same permissions
 	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
 		return err
 	}
@@ -124,14 +166,23 @@ func copyDir(src, dst string) error {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
 
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
+		entryInfo, err := os.Lstat(srcPath)
+		if err != nil {
+			return err
+		}
+		if entryInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", srcPath)
+		}
+
+		if entryInfo.IsDir() {
+			if err := copyDirNoSymlinkRecursive(srcPath, dstPath); err != nil {
 				return err
 			}
-		} else {
-			if err := copyFile(srcPath, dstPath); err != nil {
-				return err
-			}
+			continue
+		}
+
+		if err := copyRegularFile(srcPath, dstPath); err != nil {
+			return err
 		}
 	}
 
@@ -160,6 +211,64 @@ func verifyHash(file1, file2 string) (bool, error) {
 		return false, err
 	}
 	h2, err := hashFile(file2)
+	if err != nil {
+		return false, err
+	}
+	return h1 == h2, nil
+}
+
+func hashDir(path string) (string, error) {
+	h := sha256.New()
+
+	err := filepath.WalkDir(path, func(current string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, err := filepath.Rel(path, current)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(current)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(h, "L|%s|%s\n", rel, target)
+			return err
+		case info.IsDir():
+			_, err = fmt.Fprintf(h, "D|%s\n", rel)
+			return err
+		default:
+			fileHash, err := hashFile(current)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(h, "F|%s|%s\n", rel, fileHash)
+			return err
+		}
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func verifyDirHash(dir1, dir2 string) (bool, error) {
+	h1, err := hashDir(dir1)
+	if err != nil {
+		return false, err
+	}
+	h2, err := hashDir(dir2)
 	if err != nil {
 		return false, err
 	}

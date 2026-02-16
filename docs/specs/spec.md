@@ -35,6 +35,7 @@ git volume init -q
 Mounts volumes to the current Worktree according to the `git-volume.yaml` configuration.
 - Searches for settings in the current directory; if not found, traverses parent directories (towards the Git Common Dir) to inherit settings.
 - Mounts files/directories according to the configured mode (`link` or `copy`).
+- Rejects symlink sources for security.
 
 ### Usage
 ```bash
@@ -89,7 +90,7 @@ git volume unsync --dry-run
 ### Purpose
 Displays a list of the status of currently configured volumes.
 - Shows Source, Target, Mode (Link/Copy), and Status.
-- Status types: `Synced`, `Unsynced`, `Modified`, `Missing`
+- Common status values include `OK (Linked)`, `OK (Copied)`, `MODIFIED`, `NOT MOUNTED`, and `MISSING (Source)`.
 
 ### Usage
 ```bash
@@ -119,6 +120,7 @@ A group of commands for managing files in the global directory (`~/.git-volume`)
 
 #### Purpose
 Copies and registers the specified file to the global storage.
+- Rejects symlink sources. For directory sources, rejects if any nested entry is a symlink.
 
 #### Usage
 ```bash

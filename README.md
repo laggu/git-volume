@@ -104,7 +104,9 @@ git volume sync  # uses parent's git-volume.yaml
 
 ## 🛡️ Safety Features
 
+- **Symlink Source Rejection**: `sync` and `global add` reject symlink sources for security
 - **Change Detection on Unsync**: Files copied in copy mode are preserved if modified
+- **Change Detection on Status (Copy Mode)**: `status` reports `MODIFIED` when copied targets differ from source
 - **Idempotent**: Running `sync` multiple times is safe
 
 ## 📄 License

@@ -3,8 +3,14 @@ Copyright © 2026 laggu
 */
 package main
 
-import "github.com/laggu/git-volume/cmd"
+import (
+	"os"
+
+	"github.com/laggu/git-volume/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

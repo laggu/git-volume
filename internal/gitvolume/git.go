@@ -14,7 +14,7 @@ func FindWorktreeRoot(startDir string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git rev-parse failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+			return "", fmt.Errorf("git rev-parse failed (%s): %w", strings.TrimSpace(string(exitErr.Stderr)), exitErr)
 		}
 		return "", fmt.Errorf("git rev-parse failed: %w", err)
 	}
@@ -31,7 +31,7 @@ func findCommonDir(startDir string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git rev-parse --git-common-dir failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+			return "", fmt.Errorf("git rev-parse --git-common-dir failed (%s): %w", strings.TrimSpace(string(exitErr.Stderr)), exitErr)
 		}
 		return "", fmt.Errorf("git rev-parse --git-common-dir failed: %w", err)
 	}
