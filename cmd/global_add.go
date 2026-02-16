@@ -23,16 +23,16 @@ var addCmd = &cobra.Command{
 This makes the files available to be mounted via @global/ prefix in git-volume.yaml.
 
 Examples:
-  git-volume add .env
-  git-volume add .env config.json --force
-  git-volume add secrets/api.key
+  git volume global add .env
+  git volume global add .env config.json --force
+  git volume global add secrets/api.key
 
   # Save with a different name/path (single file only)
-  git-volume add .env.local --as .env
-  git-volume add .env --as secrets/prod.env
+  git volume global add .env.local --as .env
+  git volume global add .env --as secrets/prod.env
 
   # Save multiple files to a subdirectory
-  git-volume add .env config.json --path myproject`,
+  git volume global add .env config.json --path myproject`,
 	Args:         cobra.MinimumNArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,7 +40,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		return gv.Add(args, gitvolume.AddOptions{
+		return gv.GlobalAdd(args, gitvolume.AddOptions{
 			Force: addForce,
 			As:    addAs,
 			Path:  addPath,
@@ -49,7 +49,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(addCmd)
+	globalCmd.AddCommand(addCmd)
 	addCmd.Flags().BoolVarP(&addForce, "force", "f", false, "overwrite existing files in global directory")
 	addCmd.Flags().StringVarP(&addAs, "as", "a", "", "save as specific path/name (single file only)")
 	addCmd.Flags().StringVarP(&addPath, "path", "p", "", "save to subdirectory within global directory")

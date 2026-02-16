@@ -25,7 +25,7 @@ func TestGitVolume_Add_SymlinkSourceRejected(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err = gv.Add([]string{symlinkFile}, AddOptions{})
+	err = gv.GlobalAdd([]string{symlinkFile}, AddOptions{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "symlink")
 	assert.Contains(t, err.Error(), "not allowed")
@@ -49,7 +49,7 @@ func TestGitVolume_Add_RegularFile(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err = gv.Add([]string{realFile}, AddOptions{})
+	err = gv.GlobalAdd([]string{realFile}, AddOptions{})
 	require.NoError(t, err)
 
 	dstPath := filepath.Join(globalDir, "config.txt")
@@ -75,7 +75,7 @@ func TestGitVolume_Add_SymlinkDirectoryRejected(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err = gv.Add([]string{symlinkDir}, AddOptions{})
+	err = gv.GlobalAdd([]string{symlinkDir}, AddOptions{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "symlink")
 }
@@ -86,7 +86,7 @@ func TestGitVolume_Add_NonexistentSource(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err := gv.Add([]string{"/nonexistent/path/file.txt"}, AddOptions{})
+	err := gv.GlobalAdd([]string{"/nonexistent/path/file.txt"}, AddOptions{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "source does not exist")
 }
@@ -112,7 +112,7 @@ func TestGitVolume_Add_DestinationSymlinkDetected(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err = gv.Add([]string{srcFile}, AddOptions{})
+	err = gv.GlobalAdd([]string{srcFile}, AddOptions{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
@@ -135,10 +135,107 @@ func TestGitVolume_Add_DirectoryContainingSymlinkRejected(t *testing.T) {
 
 	gv := createTestGitVolume("", "", globalDir, nil)
 
-	err = gv.Add([]string{srcDir}, AddOptions{})
+	err = gv.GlobalAdd([]string{srcDir}, AddOptions{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "contains a symlink")
 
 	_, statErr := os.Lstat(filepath.Join(globalDir, "config", "secret-link"))
 	assert.True(t, os.IsNotExist(statErr), "symlink entry should never be copied")
+}
+
+func TestGlobalAdd(t *testing.T) {
+	// Setup temporary directory for global storage and source files
+	tmpDir := t.TempDir()
+	globalDir := filepath.Join(tmpDir, "global")
+	srcDir := filepath.Join(tmpDir, "src")
+
+	err := os.MkdirAll(globalDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(srcDir, 0755)
+	require.NoError(t, err)
+
+	// Create a dummy GitVolume instance with mocked context
+	gv := &GitVolume{
+		ctx: &Context{
+			GlobalDir: globalDir,
+		},
+		quiet: true,
+	}
+
+	// Create test files
+	file1 := filepath.Join(srcDir, "file1.txt")
+	err = os.WriteFile(file1, []byte("content1"), 0644)
+	require.NoError(t, err)
+
+	file2 := filepath.Join(srcDir, "file2.txt")
+	err = os.WriteFile(file2, []byte("content2"), 0644)
+	require.NoError(t, err)
+
+	t.Run("Add single file", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1}, AddOptions{})
+		assert.NoError(t, err)
+
+		destPath := filepath.Join(globalDir, "file1.txt")
+		assert.FileExists(t, destPath)
+		content, _ := os.ReadFile(destPath)
+		assert.Equal(t, "content1", string(content))
+	})
+
+	t.Run("Add multiple files", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1, file2}, AddOptions{Force: true})
+		assert.NoError(t, err)
+
+		assert.FileExists(t, filepath.Join(globalDir, "file1.txt"))
+		assert.FileExists(t, filepath.Join(globalDir, "file2.txt"))
+	})
+
+	t.Run("Add safely (no overwrite)", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1}, AddOptions{Force: false})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists")
+	})
+
+	t.Run("Add with --as (rename)", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1}, AddOptions{As: "renamed.txt"})
+		assert.NoError(t, err)
+
+		destPath := filepath.Join(globalDir, "renamed.txt")
+		assert.FileExists(t, destPath)
+		content, _ := os.ReadFile(destPath)
+		assert.Equal(t, "content1", string(content))
+	})
+
+	t.Run("Add with --path (subdirectory)", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file2}, AddOptions{Path: "subdir"})
+		assert.NoError(t, err)
+
+		destPath := filepath.Join(globalDir, "subdir", "file2.txt")
+		assert.FileExists(t, destPath)
+		content, _ := os.ReadFile(destPath)
+		assert.Equal(t, "content2", string(content))
+	})
+
+	t.Run("Add with both --as and multiple files (error)", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1, file2}, AddOptions{As: "renamed.txt"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "--as can only be used with a single file")
+	})
+
+	t.Run("Add non-existent file", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{filepath.Join(srcDir, "missing.txt")}, AddOptions{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "source does not exist")
+	})
+
+	t.Run("Security: Block symlink traversal", func(t *testing.T) {
+		outsideDir := t.TempDir()
+		symlinkDir := filepath.Join(globalDir, "symlink_dir")
+		err := os.Symlink(outsideDir, symlinkDir)
+		require.NoError(t, err)
+
+		err = gv.GlobalAdd([]string{file1}, AddOptions{Path: "symlink_dir"})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "security error")
+		assert.Contains(t, err.Error(), "path escapes base directory")
+	})
 }
