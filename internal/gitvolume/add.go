@@ -21,13 +21,6 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 		return err
 	}
 
-	globalDir := g.ctx.GlobalDir
-
-	// Ensure global directory exists
-	if err := os.MkdirAll(globalDir, DefaultDirPerm); err != nil {
-		return fmt.Errorf("failed to create global directory %s: %w", globalDir, err)
-	}
-
 	var errs []error
 	for _, file := range files {
 		targetPath, err := g.beforeAdd(file, opts)
@@ -66,10 +59,18 @@ func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
 		return fmt.Errorf("--path must be a relative path")
 	}
 
+	globalDir := g.ctx.GlobalDir
+	if err := os.MkdirAll(globalDir, DefaultDirPerm); err != nil {
+		return fmt.Errorf("failed to create global directory %s: %w", globalDir, err)
+	}
+
 	return nil
 }
 
 func (g *GitVolume) afterAllAdd(errs []error) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Global add completed with %d error(s)\n", len(errs))
+	}
 	return errors.Join(errs...)
 }
 
@@ -170,6 +171,9 @@ func (g *GitVolume) add(file, dstPath string, opts AddOptions) error {
 
 func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error) error {
 	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to add %s: %v\n", file, err)
+		}
 		return err
 	}
 

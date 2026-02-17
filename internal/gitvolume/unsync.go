@@ -41,6 +41,9 @@ func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
 }
 
 func (g *GitVolume) afterAllUnsync(errs []error) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Unsync completed with %d error(s)\n", len(errs))
+	}
 	return errors.Join(errs...)
 }
 

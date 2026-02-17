@@ -42,6 +42,9 @@ func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
 }
 
 func (g *GitVolume) afterAllSync(errs []error) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Sync completed with %d error(s)\n", len(errs))
+	}
 	return errors.Join(errs...)
 }
 
@@ -88,6 +91,9 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
 	displaySource := vol.DisplaySource()
 
 	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to sync %s: %v\n", vol.Target, err)
+		}
 		return err
 	}
 
