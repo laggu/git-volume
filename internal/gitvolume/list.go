@@ -35,20 +35,14 @@ func (g *GitVolume) GlobalList() error {
 		if !g.quiet {
 			fmt.Println("Global storage is empty.")
 		}
-		return g.afterAllGlobalList(state, nil)
+		return nil
 	}
 
 	fmt.Println(state.globalDir)
 
 	var errs []error
 	for i, child := range state.root.children {
-		if err := g.beforeGlobalList(child); err != nil {
-			g.afterGlobalList(child, err, &errs)
-			continue
-		}
-
-		err := g.globalList(child, "", i == len(state.root.children)-1)
-		g.afterGlobalList(child, err, &errs)
+		g.globalList(child, "", i == len(state.root.children)-1)
 	}
 
 	return g.afterAllGlobalList(state, errs)
@@ -63,22 +57,8 @@ func (g *GitVolume) beforeAllGlobalList() (globalListState, error) {
 	return globalListState{globalDir: globalDir, root: root}, nil
 }
 
-func (g *GitVolume) beforeGlobalList(node *treeNode) error {
-	return nil
-}
-
-func (g *GitVolume) globalList(node *treeNode, prefix string, isLast bool) error {
+func (g *GitVolume) globalList(node *treeNode, prefix string, isLast bool) {
 	printNode(node, prefix, isLast)
-	return nil
-}
-
-func (g *GitVolume) afterGlobalList(node *treeNode, err error, errs *[]error) {
-	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to list %s: %v\n", node.name, err)
-		}
-		*errs = append(*errs, err)
-	}
 }
 
 func (g *GitVolume) afterAllGlobalList(state globalListState, errs []error) error {
