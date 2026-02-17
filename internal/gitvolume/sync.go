@@ -102,7 +102,7 @@ func (g *GitVolume) syncCopy(src, dst string, force bool) error {
 			return err
 		}
 
-		return copyDirNoSymlinkWithForce(src, dst, force)
+		return copyDirNoSymlink(src, dst, force)
 	}
 
 	// Check exist
