@@ -1,6 +1,7 @@
 package gitvolume
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,32 +17,79 @@ type treeNode struct {
 	isDir    bool
 }
 
+type globalListState struct {
+	globalDir string
+	root      *treeNode
+}
+
 // GlobalList lists all files in the global directory as a tree.
 // Step 1: builds the tree from the file system
 // Step 2: prints the tree to stdout
 func (g *GitVolume) GlobalList() error {
-	globalDir := g.ctx.GlobalDir
-
-	// Step 1: build tree
-	root, err := g.buildGlobalTree(globalDir)
+	state, err := g.beforeAllGlobalList()
 	if err != nil {
 		return err
 	}
 
-	if len(root.children) == 0 {
+	if len(state.root.children) == 0 {
 		if !g.quiet {
 			fmt.Println("Global storage is empty.")
 		}
-		return nil
+		return g.afterAllGlobalList(state, nil)
 	}
 
-	// Step 2: print tree
-	fmt.Println(globalDir)
-	for i, child := range root.children {
-		printNode(child, "", i == len(root.children)-1)
+	fmt.Println(state.globalDir)
+
+	var errs []error
+	for i, child := range state.root.children {
+		if err := g.beforeGlobalList(child); err != nil {
+			_ = g.afterGlobalList(child, err)
+			errs = append(errs, err)
+			continue
+		}
+
+		err := g.globalList(child, "", i == len(state.root.children)-1)
+		if handledErr := g.afterGlobalList(child, err); handledErr != nil {
+			errs = append(errs, handledErr)
+		}
 	}
 
+	return g.afterAllGlobalList(state, errs)
+}
+
+func (g *GitVolume) beforeAllGlobalList() (globalListState, error) {
+	globalDir := g.ctx.GlobalDir
+	root, err := g.buildGlobalTree(globalDir)
+	if err != nil {
+		return globalListState{}, err
+	}
+	return globalListState{globalDir: globalDir, root: root}, nil
+}
+
+func (g *GitVolume) beforeGlobalList(node *treeNode) error {
 	return nil
+}
+
+func (g *GitVolume) globalList(node *treeNode, prefix string, isLast bool) error {
+	printNode(node, prefix, isLast)
+	return nil
+}
+
+func (g *GitVolume) afterGlobalList(node *treeNode, err error) error {
+	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to list %s: %v\n", node.name, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func (g *GitVolume) afterAllGlobalList(state globalListState, errs []error) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Global list completed with %d error(s)\n", len(errs))
+	}
+	return errors.Join(errs...)
 }
 
 // buildGlobalTree walks the global directory and returns a tree structure
