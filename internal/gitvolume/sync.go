@@ -22,13 +22,14 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		if err := g.beforeSync(vol); err != nil {
+		srcInfo, err := g.beforeSync(vol)
+		if err != nil {
 			g.afterSync(vol, opts, err)
 			errs = append(errs, err)
 			continue
 		}
 
-		err := g.sync(vol, opts)
+		err = g.sync(vol, srcInfo, opts)
 		if handledErr := g.afterSync(vol, opts, err); handledErr != nil {
 			errs = append(errs, handledErr)
 		}
@@ -48,10 +49,10 @@ func (g *GitVolume) afterAllSync(errs []error) error {
 	return errors.Join(errs...)
 }
 
-func (g *GitVolume) beforeSync(vol Volume) error {
+func (g *GitVolume) beforeSync(vol Volume) (os.FileInfo, error) {
 	// Check global directory
 	if vol.IsGlobal && g.ctx.GlobalDir == "" {
-		return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
+		return nil, fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
 	}
 
 	displaySource := vol.DisplaySource()
@@ -62,29 +63,29 @@ func (g *GitVolume) beforeSync(vol Volume) error {
 		srcBase = g.ctx.GlobalDir
 	}
 	if err := verifyPathWithinBase(vol.SourcePath, srcBase); err != nil {
-		return fmt.Errorf("security error for source %s: %w", displaySource, err)
+		return nil, fmt.Errorf("security error for source %s: %w", displaySource, err)
 	}
 	if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
-		return fmt.Errorf("security error for target %s: %w", vol.Target, err)
+		return nil, fmt.Errorf("security error for target %s: %w", vol.Target, err)
 	}
 
 	// Check if source exists and is not a symlink
 	srcInfo, err := os.Lstat(vol.SourcePath)
 	if err != nil {
-		return fmt.Errorf("source file not found: %s", vol.SourcePath)
+		return nil, fmt.Errorf("source file not found: %s", vol.SourcePath)
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath)
+		return nil, fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath)
 	}
 
-	return nil
+	return srcInfo, nil
 }
 
-func (g *GitVolume) sync(vol Volume, opts SyncOptions) error {
+func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {
 	if opts.DryRun {
 		return nil
 	}
-	return g.applyVolume(vol, opts)
+	return g.applyVolume(vol, srcInfo, opts)
 }
 
 func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
@@ -120,9 +121,9 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
 	return nil
 }
 
-func (g *GitVolume) applyVolume(vol Volume, opts SyncOptions) error {
+func (g *GitVolume) applyVolume(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {
 	if vol.Mode == ModeCopy {
-		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, srcInfo, vol.Force); err != nil {
 			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
 		}
 	} else {
@@ -134,12 +135,7 @@ func (g *GitVolume) applyVolume(vol Volume, opts SyncOptions) error {
 }
 
 // syncCopy handles copy mode synchronization
-func (g *GitVolume) syncCopy(src, dst string, force bool) error {
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
+func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo, force bool) error {
 	if srcInfo.IsDir() {
 		if dstInfo, err := os.Lstat(dst); err == nil {
 			if !dstInfo.IsDir() {
