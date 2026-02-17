@@ -15,6 +15,8 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
+	g.beforeAllSync(opts)
+
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
@@ -25,12 +27,25 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 		g.afterSync(vol, opts, err, &errs)
 	}
 
-	return g.afterAllSync(errs)
+	return g.afterAllSync(errs, opts)
 }
 
-func (g *GitVolume) afterAllSync(errs []error) error {
+func (g *GitVolume) beforeAllSync(opts SyncOptions) {
+	if !g.quiet {
+		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
+		fmt.Printf("🎯 Target worktree: %s\n", g.TargetDir())
+		if g.HasGlobalVolumes() {
+			fmt.Printf("🌐 Global directory: %s\n", g.GlobalDir())
+		}
+	}
+}
+
+func (g *GitVolume) afterAllSync(errs []error, opts SyncOptions) error {
 	if len(errs) > 0 && !g.quiet {
 		fmt.Printf("❌ Sync completed with %d error(s)\n", len(errs))
+	}
+	if len(errs) == 0 && !g.quiet && !opts.DryRun {
+		fmt.Println("✓ Volumes successfully synced")
 	}
 	return errors.Join(errs...)
 }

@@ -4,6 +4,11 @@ Copyright © 2026 laggu
 package cmd
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"text/tabwriter"
+
 	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +27,31 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
-		return gv.RunStatus()
+		if err := gv.Load(); err != nil {
+			return err
+		}
+
+		if !quiet {
+			fmt.Printf("📂 Source Config: %s\n", filepath.Join(gv.SourceDir(), gitvolume.ConfigFileName))
+			fmt.Printf("🎯 Target Root:   %s\n", gv.TargetDir())
+			if gv.HasGlobalVolumes() {
+				fmt.Printf("🌐 Global Dir:    %s\n", gv.GlobalDir())
+			}
+			fmt.Println()
+		}
+
+		statuses, err := gv.Status()
+		if err != nil {
+			return err
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		_, _ = fmt.Fprintln(w, "SOURCE\tTARGET\tMODE\tSTATUS")
+		for _, s := range statuses {
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Source, s.Target, s.Mode, s.Status)
+		}
+		_ = w.Flush()
+		return nil
 	},
 }
 
