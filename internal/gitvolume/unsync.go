@@ -14,14 +14,20 @@ type UnsyncOptions struct {
 
 // Unsync removes the volumes from the target workspace
 func (g *GitVolume) Unsync(opts UnsyncOptions) error {
-	return g.executeUnsync(opts)
-}
-
-func (g *GitVolume) executeUnsync(opts UnsyncOptions) error {
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		if err := g.processVolumeUnsync(vol, opts); err != nil {
+		if err := g.beforeUnsync(vol); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.unsync(vol, opts); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.afterUnsync(vol); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -29,11 +35,19 @@ func (g *GitVolume) executeUnsync(opts UnsyncOptions) error {
 	return errors.Join(errs...)
 }
 
-func (g *GitVolume) processVolumeUnsync(vol Volume, opts UnsyncOptions) error {
-	if err := g.validateVolumeUnsync(vol); err != nil {
-		return err
+func (g *GitVolume) beforeUnsync(vol Volume) error {
+	if vol.IsGlobal && g.ctx.GlobalDir == "" {
+		return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
 	}
 
+	// Security: verify target path doesn't escape base directory via symlinks
+	if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
+		return fmt.Errorf("security error for target %s: %w", vol.Target, err)
+	}
+	return nil
+}
+
+func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 	removable, err := g.checkRemovable(vol)
 	if err != nil {
 		if !g.quiet {
@@ -57,15 +71,7 @@ func (g *GitVolume) processVolumeUnsync(vol Volume, opts UnsyncOptions) error {
 	return g.removeVolume(vol)
 }
 
-func (g *GitVolume) validateVolumeUnsync(vol Volume) error {
-	if vol.IsGlobal && g.ctx.GlobalDir == "" {
-		return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
-	}
-
-	// Security: verify target path doesn't escape base directory via symlinks
-	if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
-		return fmt.Errorf("security error for target %s: %w", vol.Target, err)
-	}
+func (g *GitVolume) afterUnsync(vol Volume) error {
 	return nil
 }
 

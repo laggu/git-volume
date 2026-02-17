@@ -56,7 +56,18 @@ func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 
 	var errs []error
 	for _, file := range files {
-		if err := g.processAddFile(file, opts); err != nil {
+		targetPath, err := g.beforeAdd(file, opts)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.add(file, targetPath, opts); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.afterAdd(file, targetPath, opts); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -64,16 +75,7 @@ func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 	return errors.Join(errs...)
 }
 
-func (g *GitVolume) processAddFile(file string, opts AddOptions) error {
-	targetPath, err := g.validateAddFile(file, opts)
-	if err != nil {
-		return err
-	}
-
-	return g.copyAddFile(file, targetPath, opts)
-}
-
-func (g *GitVolume) validateAddFile(file string, opts AddOptions) (string, error) {
+func (g *GitVolume) beforeAdd(file string, opts AddOptions) (string, error) {
 	globalDir := g.ctx.GlobalDir
 
 	// Check if source exists (use Lstat to detect symlinks)
@@ -143,7 +145,7 @@ func (g *GitVolume) validateAddFile(file string, opts AddOptions) (string, error
 	return dstPath, nil
 }
 
-func (g *GitVolume) copyAddFile(file, dstPath string, opts AddOptions) error {
+func (g *GitVolume) add(file, dstPath string, opts AddOptions) error {
 	srcInfo, err := os.Lstat(file)
 	if err != nil {
 		return err
@@ -152,12 +154,6 @@ func (g *GitVolume) copyAddFile(file, dstPath string, opts AddOptions) error {
 	srcAbs, err := filepath.Abs(file)
 	if err != nil {
 		return err
-	}
-
-	displayDst := "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"/")
-	// Fix display path if separator is different
-	if os.PathSeparator == '\\' {
-		displayDst = "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"\\")
 	}
 
 	// Copy file or directory
@@ -171,9 +167,17 @@ func (g *GitVolume) copyAddFile(file, dstPath string, opts AddOptions) error {
 		}
 	}
 
+	return nil
+}
+
+func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions) error {
 	if !g.quiet {
+		displayDst := "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"/")
+		// Fix display path if separator is different
+		if os.PathSeparator == '\\' {
+			displayDst = "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"\\")
+		}
 		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
 	}
-
 	return nil
 }

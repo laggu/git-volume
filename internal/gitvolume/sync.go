@@ -15,14 +15,20 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
-	return g.executeSync(opts)
-}
-
-func (g *GitVolume) executeSync(opts SyncOptions) error {
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		if err := g.processVolume(vol, opts); err != nil {
+		if err := g.beforeSync(vol); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.sync(vol, opts); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if err := g.afterSync(vol); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -30,25 +36,7 @@ func (g *GitVolume) executeSync(opts SyncOptions) error {
 	return errors.Join(errs...)
 }
 
-func (g *GitVolume) processVolume(vol Volume, opts SyncOptions) error {
-	if err := g.validateVolume(vol); err != nil {
-		return err
-	}
-
-	if opts.DryRun {
-		displaySource := vol.DisplaySource()
-		action := "link"
-		if vol.Mode == ModeCopy {
-			action = "copy"
-		}
-		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
-		return nil
-	}
-
-	return g.applyVolume(vol, opts)
-}
-
-func (g *GitVolume) validateVolume(vol Volume) error {
+func (g *GitVolume) beforeSync(vol Volume) error {
 	// Check global directory
 	if vol.IsGlobal && g.ctx.GlobalDir == "" {
 		return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
@@ -77,6 +65,24 @@ func (g *GitVolume) validateVolume(vol Volume) error {
 		return fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath)
 	}
 
+	return nil
+}
+
+func (g *GitVolume) sync(vol Volume, opts SyncOptions) error {
+	if opts.DryRun {
+		displaySource := vol.DisplaySource()
+		action := "link"
+		if vol.Mode == ModeCopy {
+			action = "copy"
+		}
+		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
+		return nil
+	}
+
+	return g.applyVolume(vol, opts)
+}
+
+func (g *GitVolume) afterSync(vol Volume) error {
 	return nil
 }
 
