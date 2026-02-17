@@ -4,8 +4,6 @@ Copyright © 2026 laggu
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
 )
@@ -32,32 +30,13 @@ it looks for it in the main Git worktree (inheritance).`,
 			Quiet:      quiet,
 		})
 		if err != nil {
-			return fmt.Errorf("initialization failed: %w", err)
-		}
-
-		if err := gv.Load(); err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		if !quiet {
-			fmt.Printf("📂 Using config from: %s\n", gv.SourceDir())
-			fmt.Printf("🎯 Target worktree: %s\n", gv.TargetDir())
-			if gv.HasGlobalVolumes() {
-				fmt.Printf("🌐 Global directory: %s\n", gv.GlobalDir())
-			}
-		}
-
-		if err := gv.Sync(gitvolume.SyncOptions{
-			DryRun:        dryRun,
-			RelativeLinks: relativeLinks,
-		}); err != nil {
 			return err
 		}
 
-		if !quiet && !dryRun {
-			fmt.Println("✓ Volumes successfully synced")
-		}
-		return nil
+		return gv.Sync(gitvolume.SyncOptions{
+			DryRun:        dryRun,
+			RelativeLinks: relativeLinks,
+		})
 	},
 }
 

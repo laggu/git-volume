@@ -15,84 +15,138 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
+	if err := g.beforeAllSync(opts); err != nil {
+		return g.afterAllSync([]error{err}, opts)
+	}
+
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		// Check global directory
-		if vol.IsGlobal && g.ctx.GlobalDir == "" {
-			errs = append(errs, fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source))
-			continue
+		srcInfo, err := g.beforeSync(vol)
+		if err == nil {
+			err = g.sync(vol, srcInfo, opts)
 		}
+		g.afterSync(vol, opts, err, &errs)
+	}
 
-		displaySource := vol.DisplaySource()
+	return g.afterAllSync(errs, opts)
+}
 
-		// Security: verify paths don't escape base directories via symlinks
-		srcBase := g.ctx.SourceDir
-		if vol.IsGlobal {
-			srcBase = g.ctx.GlobalDir
-		}
-		if err := verifyPathWithinBase(vol.SourcePath, srcBase); err != nil {
-			errs = append(errs, fmt.Errorf("security error for source %s: %w", displaySource, err))
-			continue
-		}
-		if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
-			errs = append(errs, fmt.Errorf("security error for target %s: %w", vol.Target, err))
-			continue
-		}
-
-		// Check if source exists and is not a symlink
-		srcInfo, err := os.Lstat(vol.SourcePath)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("source file not found: %s", vol.SourcePath))
-			continue
-		}
-		if srcInfo.Mode()&os.ModeSymlink != 0 {
-			errs = append(errs, fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath))
-			continue
-		}
-
-		if opts.DryRun {
-			action := "link"
-			if vol.Mode == ModeCopy {
-				action = "copy"
-			}
-			fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
-			continue
-		}
-
-		if vol.Mode == ModeCopy {
-			if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
-				errs = append(errs, fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err))
-				continue
-			}
-			if g.verbose && !g.quiet {
-				fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
-			}
-		} else {
-			if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
-				errs = append(errs, fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err))
-				continue
-			}
-			if g.verbose && !g.quiet {
-				linkType := "absolute"
-				if opts.RelativeLinks {
-					linkType = "relative"
-				}
-				fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
-			}
+func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
+	if len(g.ctx.Volumes) == 0 {
+		if err := g.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 	}
 
+	if !g.quiet {
+		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
+		fmt.Printf("🎯 Target worktree: %s\n", g.TargetDir())
+		if g.HasGlobalVolumes() {
+			fmt.Printf("🌐 Global directory: %s\n", g.GlobalDir())
+		}
+	}
+
+	return nil
+}
+
+func (g *GitVolume) afterAllSync(errs []error, opts SyncOptions) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Sync completed with %d error(s)\n", len(errs))
+	}
+	if len(errs) == 0 && !g.quiet && !opts.DryRun {
+		fmt.Println("✓ Volumes successfully synced")
+	}
 	return errors.Join(errs...)
 }
 
-// syncCopy handles copy mode synchronization
-func (g *GitVolume) syncCopy(src, dst string, force bool) error {
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
+func (g *GitVolume) beforeSync(vol Volume) (os.FileInfo, error) {
+	// Check global directory
+	if vol.IsGlobal && g.ctx.GlobalDir == "" {
+		return nil, fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
 	}
 
+	displaySource := vol.DisplaySource()
+
+	// Security: verify paths don't escape base directories via symlinks
+	srcBase := g.ctx.SourceDir
+	if vol.IsGlobal {
+		srcBase = g.ctx.GlobalDir
+	}
+	if err := verifyPathWithinBase(vol.SourcePath, srcBase); err != nil {
+		return nil, fmt.Errorf("security error for source %s: %w", displaySource, err)
+	}
+	if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
+		return nil, fmt.Errorf("security error for target %s: %w", vol.Target, err)
+	}
+
+	// Check if source exists and is not a symlink
+	srcInfo, err := os.Lstat(vol.SourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("source file not found: %s", vol.SourcePath)
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath)
+	}
+
+	return srcInfo, nil
+}
+
+func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {
+	if opts.DryRun {
+		return nil
+	}
+	return g.applyVolume(vol, srcInfo, opts)
+}
+
+func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]error) {
+	displaySource := vol.DisplaySource()
+
+	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to sync %s: %v\n", vol.Target, err)
+		}
+		*errs = append(*errs, err)
+		return
+	}
+
+	if opts.DryRun {
+		action := "link"
+		if vol.Mode == ModeCopy {
+			action = "copy"
+		}
+		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
+		return
+	}
+
+	if g.verbose && !g.quiet {
+		if vol.Mode == ModeCopy {
+			fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
+		} else {
+			linkType := "absolute"
+			if opts.RelativeLinks {
+				linkType = "relative"
+			}
+			fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
+		}
+	}
+}
+
+func (g *GitVolume) applyVolume(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {
+	if vol.Mode == ModeCopy {
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, srcInfo, vol.Force); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+	} else {
+		if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
+			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+	}
+	return nil
+}
+
+// syncCopy handles copy mode synchronization
+func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo, force bool) error {
 	if srcInfo.IsDir() {
 		if dstInfo, err := os.Lstat(dst); err == nil {
 			if !dstInfo.IsDir() {

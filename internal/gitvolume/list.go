@@ -16,32 +16,47 @@ type treeNode struct {
 	isDir    bool
 }
 
+type globalListState struct {
+	globalDir string
+	root      *treeNode
+}
+
 // GlobalList lists all files in the global directory as a tree.
 // Step 1: builds the tree from the file system
 // Step 2: prints the tree to stdout
 func (g *GitVolume) GlobalList() error {
-	globalDir := g.ctx.GlobalDir
-
-	// Step 1: build tree
-	root, err := g.buildGlobalTree(globalDir)
+	state, err := g.beforeAllGlobalList()
 	if err != nil {
 		return err
 	}
 
-	if len(root.children) == 0 {
+	if len(state.root.children) == 0 {
 		if !g.quiet {
 			fmt.Println("Global storage is empty.")
 		}
 		return nil
 	}
 
-	// Step 2: print tree
-	fmt.Println(globalDir)
-	for i, child := range root.children {
-		printNode(child, "", i == len(root.children)-1)
+	fmt.Println(state.globalDir)
+
+	for i, child := range state.root.children {
+		g.globalList(child, "", i == len(state.root.children)-1)
 	}
 
 	return nil
+}
+
+func (g *GitVolume) beforeAllGlobalList() (globalListState, error) {
+	globalDir := g.ctx.GlobalDir
+	root, err := g.buildGlobalTree(globalDir)
+	if err != nil {
+		return globalListState{}, err
+	}
+	return globalListState{globalDir: globalDir, root: root}, nil
+}
+
+func (g *GitVolume) globalList(node *treeNode, prefix string, isLast bool) {
+	printNode(node, prefix, isLast)
 }
 
 // buildGlobalTree walks the global directory and returns a tree structure

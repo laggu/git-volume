@@ -15,8 +15,31 @@ type AddOptions struct {
 	Path  string // Save to subdirectory within global directory
 }
 
+type addPrepared struct {
+	dstPath string
+	srcInfo os.FileInfo
+	srcAbs  string
+}
+
 // GlobalAdd copies files to the global git-volume directory
 func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
+	if err := g.beforeAllAdd(files, opts); err != nil {
+		return err
+	}
+
+	var errs []error
+	for _, file := range files {
+		prepared, err := g.beforeAdd(file, opts)
+		if err == nil {
+			err = g.add(file, prepared, opts)
+		}
+		g.afterAdd(file, prepared.dstPath, opts, err, &errs)
+	}
+
+	return g.afterAllAdd(errs)
+}
+
+func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
 	// Validate: --as can only be used with single file
 	if opts.As != "" && len(files) > 1 {
 		return fmt.Errorf("--as can only be used with a single file")
@@ -37,47 +60,46 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	}
 
 	globalDir := g.ctx.GlobalDir
-
-	// Ensure global directory exists
 	if err := os.MkdirAll(globalDir, DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create global directory %s: %w", globalDir, err)
 	}
 
-	var errs []error
-	for _, file := range files {
-		if err := g.addFile(file, globalDir, opts); err != nil {
-			errs = append(errs, err)
-		}
-	}
+	return nil
+}
 
+func (g *GitVolume) afterAllAdd(errs []error) error {
+	if len(errs) > 0 && !g.quiet {
+		fmt.Printf("❌ Global add completed with %d error(s)\n", len(errs))
+	}
 	return errors.Join(errs...)
 }
 
-// addFile copies a single file or directory to the global directory
-func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
+func (g *GitVolume) beforeAdd(file string, opts AddOptions) (addPrepared, error) {
+	globalDir := g.ctx.GlobalDir
+
 	// Check if source exists (use Lstat to detect symlinks)
 	srcInfo, err := os.Lstat(file)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("source does not exist: %s", file)
+		return addPrepared{}, fmt.Errorf("source does not exist: %s", file)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to stat source %s: %w", file, err)
+		return addPrepared{}, fmt.Errorf("failed to stat source %s: %w", file, err)
 	}
 
 	// Reject symlink sources for security
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("source is a symlink, which is not allowed for security reasons: %s", file)
+		return addPrepared{}, fmt.Errorf("source is a symlink, which is not allowed for security reasons: %s", file)
 	}
 
 	// Only allow regular files and directories
 	if !srcInfo.Mode().IsRegular() && !srcInfo.IsDir() {
-		return fmt.Errorf("source must be a regular file or directory: %s", file)
+		return addPrepared{}, fmt.Errorf("source must be a regular file or directory: %s", file)
 	}
 
 	// Get absolute path of source
 	srcAbs, err := filepath.Abs(file)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return addPrepared{}, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	// Determine destination path
@@ -100,39 +122,59 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 
 	// Security: ensure the final destination path is within the global directory
 	if err := verifyPathWithinBase(dstPath, globalDir); err != nil {
-		return fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
+		return addPrepared{}, fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
 	}
 
 	// Check if destination exists and validate type compatibility
 	if dstInfo, err := os.Lstat(dstPath); err == nil {
 		// Check type compatibility: source and destination must be same type
 		if srcInfo.IsDir() && !dstInfo.IsDir() {
-			return fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
+			return addPrepared{}, fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
 		}
 		if !srcInfo.IsDir() && dstInfo.IsDir() {
-			return fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
+			return addPrepared{}, fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
 		}
 		if !opts.Force {
-			return fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
+			return addPrepared{}, fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
 		}
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
+		return addPrepared{}, fmt.Errorf("failed to check destination %s: %w", displayDst, err)
 	}
 
+	return addPrepared{dstPath: dstPath, srcInfo: srcInfo, srcAbs: srcAbs}, nil
+}
+
+func (g *GitVolume) add(file string, prepared addPrepared, opts AddOptions) error {
 	// Copy file or directory
-	if srcInfo.IsDir() {
-		if err := copyDirNoSymlink(srcAbs, dstPath, true); err != nil {
+	if prepared.srcInfo.IsDir() {
+		if err := copyDirNoSymlink(prepared.srcAbs, prepared.dstPath, true); err != nil {
 			return fmt.Errorf("failed to copy directory %s: %w", file, err)
 		}
 	} else {
-		if err := copyFile(srcAbs, dstPath); err != nil {
+		if err := copyFile(prepared.srcAbs, prepared.dstPath); err != nil {
 			return fmt.Errorf("failed to copy %s: %w", file, err)
 		}
 	}
 
-	if !g.quiet {
-		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
+	return nil
+}
+
+func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error, errs *[]error) {
+	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to add %s: %v\n", file, err)
+		}
+		*errs = append(*errs, err)
+		return
 	}
 
-	return nil
+	if !g.quiet {
+		relPath, err := filepath.Rel(g.ctx.GlobalDir, dstPath)
+		if err != nil {
+			// This should not happen due to prior validation, but as a fallback:
+			relPath = filepath.Base(dstPath)
+		}
+		displayDst := "@global/" + filepath.ToSlash(relPath)
+		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
+	}
 }

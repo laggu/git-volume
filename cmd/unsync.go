@@ -4,8 +4,6 @@ Copyright © 2026 laggu
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/laggu/git-volume/internal/gitvolume"
 	"github.com/spf13/cobra"
 )
@@ -27,27 +25,12 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 			Quiet:      quiet,
 		})
 		if err != nil {
-			return fmt.Errorf("initialization failed: %w", err)
-		}
-
-		if err := gv.Load(); err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		if !quiet {
-			fmt.Printf("📂 Using config from: %s\n", gv.SourceDir())
-		}
-
-		if err := gv.Unsync(gitvolume.UnsyncOptions{
-			DryRun: dryRun,
-		}); err != nil {
 			return err
 		}
 
-		if !quiet && !dryRun {
-			fmt.Println("✓ Unsync complete")
-		}
-		return nil
+		return gv.Unsync(gitvolume.UnsyncOptions{
+			DryRun: dryRun,
+		})
 	},
 }
 
