@@ -20,33 +20,7 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	if err := g.beforeAllAdd(files, opts); err != nil {
 		return err
 	}
-	return g.executeGlobalAdd(files, opts)
-}
 
-func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
-	// Validate: --as can only be used with single file
-	if opts.As != "" && len(files) > 1 {
-		return fmt.Errorf("--as can only be used with a single file")
-	}
-
-	// Validate: paths must not contain .. or be absolute
-	if strings.Contains(opts.As, "..") {
-		return fmt.Errorf("--as path cannot contain '..'")
-	}
-	if strings.Contains(opts.Path, "..") {
-		return fmt.Errorf("--path cannot contain '..'")
-	}
-	if filepath.IsAbs(opts.As) {
-		return fmt.Errorf("--as must be a relative path")
-	}
-	if filepath.IsAbs(opts.Path) {
-		return fmt.Errorf("--path must be a relative path")
-	}
-
-	return nil
-}
-
-func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 	globalDir := g.ctx.GlobalDir
 
 	// Ensure global directory exists
@@ -70,6 +44,29 @@ func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 	}
 
 	return g.afterAllAdd(errs)
+}
+
+func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
+	// Validate: --as can only be used with single file
+	if opts.As != "" && len(files) > 1 {
+		return fmt.Errorf("--as can only be used with a single file")
+	}
+
+	// Validate: paths must not contain .. or be absolute
+	if strings.Contains(opts.As, "..") {
+		return fmt.Errorf("--as path cannot contain '..'")
+	}
+	if strings.Contains(opts.Path, "..") {
+		return fmt.Errorf("--path cannot contain '..'")
+	}
+	if filepath.IsAbs(opts.As) {
+		return fmt.Errorf("--as must be a relative path")
+	}
+	if filepath.IsAbs(opts.Path) {
+		return fmt.Errorf("--path must be a relative path")
+	}
+
+	return nil
 }
 
 func (g *GitVolume) afterAllAdd(errs []error) error {
