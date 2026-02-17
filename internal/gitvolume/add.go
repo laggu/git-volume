@@ -169,11 +169,12 @@ func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error, e
 	}
 
 	if !g.quiet {
-		displayDst := "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"/")
-		// Fix display path if separator is different
-		if os.PathSeparator == '\\' {
-			displayDst = "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"\\")
+		relPath, err := filepath.Rel(g.ctx.GlobalDir, dstPath)
+		if err != nil {
+			// This should not happen due to prior validation, but as a fallback:
+			relPath = filepath.Base(dstPath)
 		}
+		displayDst := "@global/" + filepath.ToSlash(relPath)
 		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
 	}
 }

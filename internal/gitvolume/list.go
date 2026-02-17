@@ -1,7 +1,6 @@
 package gitvolume
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -40,12 +39,11 @@ func (g *GitVolume) GlobalList() error {
 
 	fmt.Println(state.globalDir)
 
-	var errs []error
 	for i, child := range state.root.children {
 		g.globalList(child, "", i == len(state.root.children)-1)
 	}
 
-	return g.afterAllGlobalList(state, errs)
+	return nil
 }
 
 func (g *GitVolume) beforeAllGlobalList() (globalListState, error) {
@@ -59,13 +57,6 @@ func (g *GitVolume) beforeAllGlobalList() (globalListState, error) {
 
 func (g *GitVolume) globalList(node *treeNode, prefix string, isLast bool) {
 	printNode(node, prefix, isLast)
-}
-
-func (g *GitVolume) afterAllGlobalList(state globalListState, errs []error) error {
-	if len(errs) > 0 && !g.quiet {
-		fmt.Printf("❌ Global list completed with %d error(s)\n", len(errs))
-	}
-	return errors.Join(errs...)
 }
 
 // buildGlobalTree walks the global directory and returns a tree structure
