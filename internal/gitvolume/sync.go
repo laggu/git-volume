@@ -23,12 +23,9 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 
 	for _, vol := range g.ctx.Volumes {
 		srcInfo, err := g.beforeSync(vol)
-		if err != nil {
-			g.afterSync(vol, opts, err, &errs)
-			continue
+		if err == nil {
+			err = g.sync(vol, srcInfo, opts)
 		}
-
-		err = g.sync(vol, srcInfo, opts)
 		g.afterSync(vol, opts, err, &errs)
 	}
 

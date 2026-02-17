@@ -21,12 +21,10 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		if err := g.beforeUnsync(vol); err != nil {
-			g.afterUnsync(vol, opts, err, &errs)
-			continue
+		err := g.beforeUnsync(vol)
+		if err == nil {
+			err = g.unsync(vol, opts)
 		}
-
-		err := g.unsync(vol, opts)
 		g.afterUnsync(vol, opts, err, &errs)
 	}
 

@@ -30,12 +30,9 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	var errs []error
 	for _, file := range files {
 		prepared, err := g.beforeAdd(file, opts)
-		if err != nil {
-			g.afterAdd(file, "", opts, err, &errs)
-			continue
+		if err == nil {
+			err = g.add(file, prepared, opts)
 		}
-
-		err = g.add(file, prepared, opts)
 		g.afterAdd(file, prepared.dstPath, opts, err, &errs)
 	}
 
