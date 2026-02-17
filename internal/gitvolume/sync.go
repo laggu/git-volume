@@ -15,75 +15,94 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
+	return g.executeSync(opts)
+}
+
+func (g *GitVolume) executeSync(opts SyncOptions) error {
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
-		// Check global directory
-		if vol.IsGlobal && g.ctx.GlobalDir == "" {
-			errs = append(errs, fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source))
-			continue
-		}
-
-		displaySource := vol.DisplaySource()
-
-		// Security: verify paths don't escape base directories via symlinks
-		srcBase := g.ctx.SourceDir
-		if vol.IsGlobal {
-			srcBase = g.ctx.GlobalDir
-		}
-		if err := verifyPathWithinBase(vol.SourcePath, srcBase); err != nil {
-			errs = append(errs, fmt.Errorf("security error for source %s: %w", displaySource, err))
-			continue
-		}
-		if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
-			errs = append(errs, fmt.Errorf("security error for target %s: %w", vol.Target, err))
-			continue
-		}
-
-		// Check if source exists and is not a symlink
-		srcInfo, err := os.Lstat(vol.SourcePath)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("source file not found: %s", vol.SourcePath))
-			continue
-		}
-		if srcInfo.Mode()&os.ModeSymlink != 0 {
-			errs = append(errs, fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath))
-			continue
-		}
-
-		if opts.DryRun {
-			action := "link"
-			if vol.Mode == ModeCopy {
-				action = "copy"
-			}
-			fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
-			continue
-		}
-
-		if vol.Mode == ModeCopy {
-			if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
-				errs = append(errs, fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err))
-				continue
-			}
-			if g.verbose && !g.quiet {
-				fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
-			}
-		} else {
-			if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
-				errs = append(errs, fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err))
-				continue
-			}
-			if g.verbose && !g.quiet {
-				linkType := "absolute"
-				if opts.RelativeLinks {
-					linkType = "relative"
-				}
-				fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
-			}
+		if err := g.processVolume(vol, opts); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+func (g *GitVolume) processVolume(vol Volume, opts SyncOptions) error {
+	if err := g.validateVolume(vol); err != nil {
+		return err
+	}
+
+	if opts.DryRun {
+		displaySource := vol.DisplaySource()
+		action := "link"
+		if vol.Mode == ModeCopy {
+			action = "copy"
+		}
+		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
+		return nil
+	}
+
+	return g.applyVolume(vol, opts)
+}
+
+func (g *GitVolume) validateVolume(vol Volume) error {
+	// Check global directory
+	if vol.IsGlobal && g.ctx.GlobalDir == "" {
+		return fmt.Errorf("global source '@global/%s' used but global directory not configured", vol.Source)
+	}
+
+	displaySource := vol.DisplaySource()
+
+	// Security: verify paths don't escape base directories via symlinks
+	srcBase := g.ctx.SourceDir
+	if vol.IsGlobal {
+		srcBase = g.ctx.GlobalDir
+	}
+	if err := verifyPathWithinBase(vol.SourcePath, srcBase); err != nil {
+		return fmt.Errorf("security error for source %s: %w", displaySource, err)
+	}
+	if err := verifyPathWithinBase(vol.TargetPath, g.ctx.TargetDir); err != nil {
+		return fmt.Errorf("security error for target %s: %w", vol.Target, err)
+	}
+
+	// Check if source exists and is not a symlink
+	srcInfo, err := os.Lstat(vol.SourcePath)
+	if err != nil {
+		return fmt.Errorf("source file not found: %s", vol.SourcePath)
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("source file is a symlink, which is not allowed for security reasons: %s", vol.SourcePath)
+	}
+
+	return nil
+}
+
+func (g *GitVolume) applyVolume(vol Volume, opts SyncOptions) error {
+	displaySource := vol.DisplaySource()
+
+	if vol.Mode == ModeCopy {
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+		if g.verbose && !g.quiet {
+			fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
+		}
+	} else {
+		if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
+			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+		if g.verbose && !g.quiet {
+			linkType := "absolute"
+			if opts.RelativeLinks {
+				linkType = "relative"
+			}
+			fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
+		}
+	}
+	return nil
 }
 
 // syncCopy handles copy mode synchronization

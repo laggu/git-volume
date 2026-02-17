@@ -17,6 +17,13 @@ type AddOptions struct {
 
 // GlobalAdd copies files to the global git-volume directory
 func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
+	if err := g.validateGlobalAdd(files, opts); err != nil {
+		return err
+	}
+	return g.executeGlobalAdd(files, opts)
+}
+
+func (g *GitVolume) validateGlobalAdd(files []string, opts AddOptions) error {
 	// Validate: --as can only be used with single file
 	if opts.As != "" && len(files) > 1 {
 		return fmt.Errorf("--as can only be used with a single file")
@@ -36,6 +43,10 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 		return fmt.Errorf("--path must be a relative path")
 	}
 
+	return nil
+}
+
+func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 	globalDir := g.ctx.GlobalDir
 
 	// Ensure global directory exists
@@ -45,7 +56,7 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 
 	var errs []error
 	for _, file := range files {
-		if err := g.addFile(file, globalDir, opts); err != nil {
+		if err := g.processAddFile(file, opts); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -53,31 +64,41 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	return errors.Join(errs...)
 }
 
-// addFile copies a single file or directory to the global directory
-func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
+func (g *GitVolume) processAddFile(file string, opts AddOptions) error {
+	targetPath, err := g.validateAddFile(file, opts)
+	if err != nil {
+		return err
+	}
+
+	return g.copyAddFile(file, targetPath, opts)
+}
+
+func (g *GitVolume) validateAddFile(file string, opts AddOptions) (string, error) {
+	globalDir := g.ctx.GlobalDir
+
 	// Check if source exists (use Lstat to detect symlinks)
 	srcInfo, err := os.Lstat(file)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("source does not exist: %s", file)
+		return "", fmt.Errorf("source does not exist: %s", file)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to stat source %s: %w", file, err)
+		return "", fmt.Errorf("failed to stat source %s: %w", file, err)
 	}
 
 	// Reject symlink sources for security
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("source is a symlink, which is not allowed for security reasons: %s", file)
+		return "", fmt.Errorf("source is a symlink, which is not allowed for security reasons: %s", file)
 	}
 
 	// Only allow regular files and directories
 	if !srcInfo.Mode().IsRegular() && !srcInfo.IsDir() {
-		return fmt.Errorf("source must be a regular file or directory: %s", file)
+		return "", fmt.Errorf("source must be a regular file or directory: %s", file)
 	}
 
 	// Get absolute path of source
 	srcAbs, err := filepath.Abs(file)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	// Determine destination path
@@ -100,23 +121,43 @@ func (g *GitVolume) addFile(file, globalDir string, opts AddOptions) error {
 
 	// Security: ensure the final destination path is within the global directory
 	if err := verifyPathWithinBase(dstPath, globalDir); err != nil {
-		return fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
+		return "", fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
 	}
 
 	// Check if destination exists and validate type compatibility
 	if dstInfo, err := os.Lstat(dstPath); err == nil {
 		// Check type compatibility: source and destination must be same type
 		if srcInfo.IsDir() && !dstInfo.IsDir() {
-			return fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
+			return "", fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
 		}
 		if !srcInfo.IsDir() && dstInfo.IsDir() {
-			return fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
+			return "", fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
 		}
 		if !opts.Force {
-			return fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
+			return "", fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
 		}
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to check destination %s: %w", displayDst, err)
+		return "", fmt.Errorf("failed to check destination %s: %w", displayDst, err)
+	}
+
+	return dstPath, nil
+}
+
+func (g *GitVolume) copyAddFile(file, dstPath string, opts AddOptions) error {
+	srcInfo, err := os.Lstat(file)
+	if err != nil {
+		return err
+	}
+
+	srcAbs, err := filepath.Abs(file)
+	if err != nil {
+		return err
+	}
+
+	displayDst := "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"/")
+	// Fix display path if separator is different
+	if os.PathSeparator == '\\' {
+		displayDst = "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"\\")
 	}
 
 	// Copy file or directory
