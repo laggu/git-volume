@@ -15,20 +15,14 @@ type initState struct {
 // Init initializes git-volume (creates global directory and sample config)
 func (g *GitVolume) Init() error {
 	state := &initState{}
-	if err := g.beforeInit(state); err != nil {
-		_ = g.afterInit(state, err)
-		return err
+	err := g.beforeInit(state)
+	if err == nil {
+		err = g.init(state)
 	}
-
-	err := g.init(state)
 	return g.afterInit(state, err)
 }
 
 func (g *GitVolume) beforeInit(state *initState) error {
-	if err := os.MkdirAll(g.ctx.GlobalDir, DefaultDirPerm); err != nil {
-		return fmt.Errorf("failed to create global directory %s: %w", g.ctx.GlobalDir, err)
-	}
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
@@ -42,6 +36,10 @@ func (g *GitVolume) beforeInit(state *initState) error {
 }
 
 func (g *GitVolume) init(state *initState) error {
+	if err := os.MkdirAll(g.ctx.GlobalDir, DefaultDirPerm); err != nil {
+		return fmt.Errorf("failed to create global directory %s: %w", g.ctx.GlobalDir, err)
+	}
+
 	if _, err := os.Stat(state.configPath); os.IsNotExist(err) {
 		if err := os.WriteFile(state.configPath, []byte(SampleConfig), DefaultFilePerm); err != nil {
 			return fmt.Errorf("failed to create sample config: %w", err)
