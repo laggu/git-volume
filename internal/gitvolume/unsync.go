@@ -22,15 +22,12 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 
 	for _, vol := range g.ctx.Volumes {
 		if err := g.beforeUnsync(vol); err != nil {
-			g.afterUnsync(vol, opts, err)
-			errs = append(errs, err)
+			g.afterUnsync(vol, opts, err, &errs)
 			continue
 		}
 
 		err := g.unsync(vol, opts)
-		if handledErr := g.afterUnsync(vol, opts, err); handledErr != nil {
-			errs = append(errs, handledErr)
-		}
+		g.afterUnsync(vol, opts, err, &errs)
 	}
 
 	return g.afterAllUnsync(errs)
@@ -83,14 +80,13 @@ func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 	return g.removeVolume(vol)
 }
 
-func (g *GitVolume) afterUnsync(vol Volume, opts UnsyncOptions, err error) error {
+func (g *GitVolume) afterUnsync(vol Volume, opts UnsyncOptions, err error, errs *[]error) {
 	if err != nil {
 		if !g.quiet {
 			fmt.Printf("❌ Failed to unsync %s: %v\n", vol.Target, err)
 		}
-		return err
+		*errs = append(*errs, err)
 	}
-	return nil
 }
 
 func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {

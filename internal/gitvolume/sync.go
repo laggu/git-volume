@@ -24,15 +24,12 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 	for _, vol := range g.ctx.Volumes {
 		srcInfo, err := g.beforeSync(vol)
 		if err != nil {
-			g.afterSync(vol, opts, err)
-			errs = append(errs, err)
+			g.afterSync(vol, opts, err, &errs)
 			continue
 		}
 
 		err = g.sync(vol, srcInfo, opts)
-		if handledErr := g.afterSync(vol, opts, err); handledErr != nil {
-			errs = append(errs, handledErr)
-		}
+		g.afterSync(vol, opts, err, &errs)
 	}
 
 	return g.afterAllSync(errs)
@@ -88,14 +85,15 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 	return g.applyVolume(vol, srcInfo, opts)
 }
 
-func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
+func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]error) {
 	displaySource := vol.DisplaySource()
 
 	if err != nil {
 		if !g.quiet {
 			fmt.Printf("❌ Failed to sync %s: %v\n", vol.Target, err)
 		}
-		return err
+		*errs = append(*errs, err)
+		return
 	}
 
 	if opts.DryRun {
@@ -104,7 +102,7 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
 			action = "copy"
 		}
 		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
-		return nil
+		return
 	}
 
 	if g.verbose && !g.quiet {
@@ -118,7 +116,6 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
 			fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
 		}
 	}
-	return nil
 }
 
 func (g *GitVolume) applyVolume(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {

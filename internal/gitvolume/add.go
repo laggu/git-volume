@@ -31,15 +31,12 @@ func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
 	for _, file := range files {
 		prepared, err := g.beforeAdd(file, opts)
 		if err != nil {
-			g.afterAdd(file, "", opts, err)
-			errs = append(errs, err)
+			g.afterAdd(file, "", opts, err, &errs)
 			continue
 		}
 
 		err = g.add(file, prepared, opts)
-		if handledErr := g.afterAdd(file, prepared.dstPath, opts, err); handledErr != nil {
-			errs = append(errs, handledErr)
-		}
+		g.afterAdd(file, prepared.dstPath, opts, err, &errs)
 	}
 
 	return g.afterAllAdd(errs)
@@ -165,12 +162,13 @@ func (g *GitVolume) add(file string, prepared addPrepared, opts AddOptions) erro
 	return nil
 }
 
-func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error) error {
+func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error, errs *[]error) {
 	if err != nil {
 		if !g.quiet {
 			fmt.Printf("❌ Failed to add %s: %v\n", file, err)
 		}
-		return err
+		*errs = append(*errs, err)
+		return
 	}
 
 	if !g.quiet {
@@ -181,5 +179,4 @@ func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error) e
 		}
 		fmt.Printf("✓ Added %s -> %s\n", file, displayDst)
 	}
-	return nil
 }
