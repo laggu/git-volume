@@ -7,26 +7,13 @@ import (
 	"text/tabwriter"
 )
 
-// Status returns the status of all volumes
-func (g *GitVolume) Status() ([]VolumeStatus, error) {
-	statuses := make([]VolumeStatus, 0, len(g.ctx.Volumes))
-	for _, v := range g.ctx.Volumes {
-		statuses = append(statuses, v.CheckStatus())
-	}
-	return statuses, nil
-}
-
-func (g *GitVolume) StatusView() error {
+func (g *GitVolume) Status() error {
 	if err := g.beforeAllStatus(); err != nil {
 		return err
 	}
 
 	statuses, err := g.status()
-	if err != nil {
-		return g.afterAllStatus(nil, err)
-	}
-
-	return g.afterAllStatus(statuses, nil)
+	return g.afterAllStatus(statuses, err)
 }
 
 func (g *GitVolume) beforeAllStatus() error {
@@ -47,7 +34,11 @@ func (g *GitVolume) beforeAllStatus() error {
 }
 
 func (g *GitVolume) status() ([]VolumeStatus, error) {
-	return g.Status()
+	statuses := make([]VolumeStatus, 0, len(g.ctx.Volumes))
+	for _, v := range g.ctx.Volumes {
+		statuses = append(statuses, v.CheckStatus())
+	}
+	return statuses, nil
 }
 
 func (g *GitVolume) afterAllStatus(statuses []VolumeStatus, err error) error {

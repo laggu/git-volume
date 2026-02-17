@@ -22,7 +22,7 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
-		return gv.StatusView()
+		return gv.Status()
 	},
 }
 
