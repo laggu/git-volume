@@ -28,10 +28,6 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 			return err
 		}
 
-		if err := gv.Load(); err != nil {
-			return err
-		}
-
 		return gv.Unsync(gitvolume.UnsyncOptions{
 			DryRun: dryRun,
 		})

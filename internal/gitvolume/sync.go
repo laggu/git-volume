@@ -15,7 +15,9 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
-	g.beforeAllSync(opts)
+	if err := g.beforeAllSync(opts); err != nil {
+		return g.afterAllSync([]error{err}, opts)
+	}
 
 	var errs []error
 
@@ -30,7 +32,13 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 	return g.afterAllSync(errs, opts)
 }
 
-func (g *GitVolume) beforeAllSync(opts SyncOptions) {
+func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
+	if len(g.ctx.Volumes) == 0 {
+		if err := g.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+	}
+
 	if !g.quiet {
 		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
 		fmt.Printf("🎯 Target worktree: %s\n", g.TargetDir())
@@ -38,6 +46,8 @@ func (g *GitVolume) beforeAllSync(opts SyncOptions) {
 			fmt.Printf("🌐 Global directory: %s\n", g.GlobalDir())
 		}
 	}
+
+	return nil
 }
 
 func (g *GitVolume) afterAllSync(errs []error, opts SyncOptions) error {

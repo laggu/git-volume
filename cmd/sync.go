@@ -33,10 +33,6 @@ it looks for it in the main Git worktree (inheritance).`,
 			return err
 		}
 
-		if err := gv.Load(); err != nil {
-			return err
-		}
-
 		return gv.Sync(gitvolume.SyncOptions{
 			DryRun:        dryRun,
 			RelativeLinks: relativeLinks,

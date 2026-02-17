@@ -14,7 +14,9 @@ type UnsyncOptions struct {
 
 // Unsync removes the volumes from the target workspace
 func (g *GitVolume) Unsync(opts UnsyncOptions) error {
-	g.beforeAllUnsync(opts)
+	if err := g.beforeAllUnsync(opts); err != nil {
+		return g.afterAllUnsync([]error{err}, opts)
+	}
 
 	var errs []error
 
@@ -29,10 +31,18 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 	return g.afterAllUnsync(errs, opts)
 }
 
-func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) {
+func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
+	if len(g.ctx.Volumes) == 0 {
+		if err := g.Load(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+	}
+
 	if !g.quiet {
 		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
 	}
+
+	return nil
 }
 
 func (g *GitVolume) afterAllUnsync(errs []error, opts UnsyncOptions) error {
