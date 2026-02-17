@@ -48,13 +48,16 @@ func copyFile(src, dst string) error {
 	return dstFile.Close()
 }
 
+// copyDir recursively copies a directory tree.
+// It explicitly prohibits symlinks in the source directory for security reasons,
+// to prevent potential path traversal or circular reference attacks.
 func copyDir(src, dst string) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", src)
+		return fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
 	}
 
 	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
@@ -75,7 +78,7 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if entryInfo.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", srcPath)
+			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", srcPath)
 		}
 
 		if entryInfo.IsDir() {

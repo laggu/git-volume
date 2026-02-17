@@ -97,12 +97,13 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 		return nil
 	}
 
-	// Delete-and-Recreate strategy:
-	// Always remove the target path before syncing to ensure a clean state.
-	// This helps with:
+	// Delete-and-Recreate strategy (Idempotency):
+	// ensuring the target state exactly matches the source state.
+	// We always remove the target path before syncing to guarantees a clean slate.
+	// This approach handles several edge cases automatically:
 	// 1. Switching between file and directory (e.g., symlink to directory)
 	// 2. Switching modes (copy <-> link)
-	// 3. Removing stale files in directories (mirroring)
+	// 3. Removing stale files in directories (mirroring) when switching from a directory that had extra files.
 	if err := os.RemoveAll(vol.TargetPath); err != nil {
 		return fmt.Errorf("failed to clean target %s: %w", vol.Target, err)
 	}
