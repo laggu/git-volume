@@ -22,6 +22,7 @@ var rootCmd = &cobra.Command{
 by dynamically mounting them using a git-volume.yaml manifest.
 
 "Keep code in Git, mount environments as volumes."`,
+	SilenceErrors: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
