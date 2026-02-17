@@ -75,7 +75,7 @@ volumes:
   # With options
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (default) or copy
-    force: true    # overwrite if exists
+
 ```
 
 ### Mode Comparison

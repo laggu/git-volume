@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	addForce bool
-	addAs    string
-	addPath  string
+	addAs   string
+	addPath string
 )
 
 // addCmd represents the add command
@@ -24,7 +23,7 @@ This makes the files available to be mounted via @global/ prefix in git-volume.y
 
 Examples:
   git volume global add .env
-  git volume global add .env config.json --force
+  git volume global add .env
   git volume global add secrets/api.key
 
   # Save with a different name/path (single file only)
@@ -41,16 +40,14 @@ Examples:
 			return err
 		}
 		return gv.GlobalAdd(args, gitvolume.AddOptions{
-			Force: addForce,
-			As:    addAs,
-			Path:  addPath,
+			As:   addAs,
+			Path: addPath,
 		})
 	},
 }
 
 func init() {
 	globalCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolVarP(&addForce, "force", "f", false, "overwrite existing files in global directory")
 	addCmd.Flags().StringVarP(&addAs, "as", "a", "", "save as specific path/name (single file only)")
 	addCmd.Flags().StringVarP(&addPath, "path", "p", "", "save to subdirectory within global directory")
 	addCmd.MarkFlagsMutuallyExclusive("as", "path")

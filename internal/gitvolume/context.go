@@ -45,7 +45,6 @@ type Volume struct {
 	SourcePath string // Resolved absolute source path
 	TargetPath string // Resolved absolute target path
 	Mode       string // "link" or "copy"
-	Force      bool   // Whether to overwrite existing files
 	IsGlobal   bool   // True if source uses @global/ prefix
 }
 
@@ -81,7 +80,6 @@ func (v *Volume) UnmarshalYAML(value *yaml.Node) error {
 	var raw struct {
 		Mount string `yaml:"mount"`
 		Mode  string `yaml:"mode"`
-		Force bool   `yaml:"force"`
 	}
 	if err := value.Decode(&raw); err != nil {
 		return err
@@ -96,7 +94,6 @@ func (v *Volume) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	v.Mode = raw.Mode
-	v.Force = raw.Force
 
 	// Set default mode if not specified
 	if v.Mode == "" {

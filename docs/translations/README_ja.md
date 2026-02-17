@@ -75,7 +75,7 @@ volumes:
   # オプション指定
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (デフォルト) または copy
-    force: true    # すでに存在する場合に上書き
+
 ```
 
 ### モード比較

@@ -182,15 +182,22 @@ func TestGlobalAdd(t *testing.T) {
 	})
 
 	t.Run("Add multiple files", func(t *testing.T) {
-		err := gv.GlobalAdd([]string{file1, file2}, AddOptions{Force: true})
+		file3 := filepath.Join(srcDir, "file3.txt")
+		err = os.WriteFile(file3, []byte("content3"), 0644)
+		require.NoError(t, err)
+		file4 := filepath.Join(srcDir, "file4.txt")
+		err = os.WriteFile(file4, []byte("content4"), 0644)
+		require.NoError(t, err)
+
+		err := gv.GlobalAdd([]string{file3, file4}, AddOptions{})
 		assert.NoError(t, err)
 
-		assert.FileExists(t, filepath.Join(globalDir, "file1.txt"))
-		assert.FileExists(t, filepath.Join(globalDir, "file2.txt"))
+		assert.FileExists(t, filepath.Join(globalDir, "file3.txt"))
+		assert.FileExists(t, filepath.Join(globalDir, "file4.txt"))
 	})
 
-	t.Run("Add safely (no overwrite)", func(t *testing.T) {
-		err := gv.GlobalAdd([]string{file1}, AddOptions{Force: false})
+	t.Run("Add existing file (error)", func(t *testing.T) {
+		err := gv.GlobalAdd([]string{file1}, AddOptions{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
 	})

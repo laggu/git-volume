@@ -67,6 +67,6 @@ volumes:
   - ".env.shared:.env"                    # 단순 형식 (기본: link 모드)
   - mount: "secrets/prod.key:config/key"  # 객체 형식
     mode: "copy"                          # link 또는 copy
-    force: true                           # 기존 파일 덮어쓰기
+
   - "@global/secrets/key:config/key"      # 글로벌 디렉토리 참조
 ```

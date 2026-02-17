@@ -48,7 +48,7 @@ func copyFile(src, dst string) error {
 	return dstFile.Close()
 }
 
-func copyDirNoSymlink(src, dst string, force bool) error {
+func copyDir(src, dst string) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -85,15 +85,20 @@ func copyDirNoSymlink(src, dst string, force bool) error {
 				return err
 			}
 
-			if err := copyDirNoSymlink(srcPath, dstPath, force); err != nil {
+			if err := copyDir(srcPath, dstPath); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if _, err := os.Lstat(dstPath); err == nil {
-			if !force {
-				continue
+		// If target exists, verify it's a regular file or symlink
+		if info, err := os.Lstat(dstPath); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(dstPath); err != nil {
+					return fmt.Errorf("failed to remove existing symlink: %w", err)
+				}
+			} else if !info.Mode().IsRegular() {
+				return fmt.Errorf("target exists and is not a regular file: %s", dstPath)
 			}
 		} else if !os.IsNotExist(err) {
 			return err

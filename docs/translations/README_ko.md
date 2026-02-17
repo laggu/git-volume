@@ -75,7 +75,7 @@ volumes:
   # 옵션이 필요할 때
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (기본) 또는 copy
-    force: true    # 존재 시 덮어쓰기
+
 ```
 
 ### 모드 비교

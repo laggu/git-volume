@@ -10,9 +10,8 @@ import (
 
 // AddOptions configures the GlobalAdd operation
 type AddOptions struct {
-	Force bool   // Overwrite existing files in global directory
-	As    string // Save as specific path/name (single file only)
-	Path  string // Save to subdirectory within global directory
+	As   string // Save as specific path/name (single file only)
+	Path string // Save to subdirectory within global directory
 }
 
 type addPrepared struct {
@@ -125,18 +124,9 @@ func (g *GitVolume) beforeAdd(file string, opts AddOptions) (addPrepared, error)
 		return addPrepared{}, fmt.Errorf("security error for destination path %q: %w", targetSubPath, err)
 	}
 
-	// Check if destination exists and validate type compatibility
-	if dstInfo, err := os.Lstat(dstPath); err == nil {
-		// Check type compatibility: source and destination must be same type
-		if srcInfo.IsDir() && !dstInfo.IsDir() {
-			return addPrepared{}, fmt.Errorf("cannot overwrite file with directory: %s", displayDst)
-		}
-		if !srcInfo.IsDir() && dstInfo.IsDir() {
-			return addPrepared{}, fmt.Errorf("cannot overwrite directory with file: %s", displayDst)
-		}
-		if !opts.Force {
-			return addPrepared{}, fmt.Errorf("already exists: %s (use --force to overwrite)", displayDst)
-		}
+	// Check if destination exists
+	if _, err := os.Lstat(dstPath); err == nil {
+		return addPrepared{}, fmt.Errorf("already exists: %s", displayDst)
 	} else if !os.IsNotExist(err) {
 		return addPrepared{}, fmt.Errorf("failed to check destination %s: %w", displayDst, err)
 	}
@@ -147,7 +137,7 @@ func (g *GitVolume) beforeAdd(file string, opts AddOptions) (addPrepared, error)
 func (g *GitVolume) add(file string, prepared addPrepared, opts AddOptions) error {
 	// Copy file or directory
 	if prepared.srcInfo.IsDir() {
-		if err := copyDirNoSymlink(prepared.srcAbs, prepared.dstPath, true); err != nil {
+		if err := copyDir(prepared.srcAbs, prepared.dstPath); err != nil {
 			return fmt.Errorf("failed to copy directory %s: %w", file, err)
 		}
 	} else {
