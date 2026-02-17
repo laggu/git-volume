@@ -81,7 +81,13 @@ func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 }
 
 func (g *GitVolume) afterUnsync(vol Volume, opts UnsyncOptions, err error) error {
-	return err
+	if err != nil {
+		if !g.quiet {
+			fmt.Printf("❌ Failed to unsync %s: %v\n", vol.Target, err)
+		}
+		return err
+	}
+	return nil
 }
 
 func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {
