@@ -15,24 +15,33 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
+	if err := g.beforeAllSync(opts); err != nil {
+		return err
+	}
+
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
 		if err := g.beforeSync(vol); err != nil {
+			g.afterSync(vol, opts, err)
 			errs = append(errs, err)
 			continue
 		}
 
-		if err := g.sync(vol, opts); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		if err := g.afterSync(vol); err != nil {
-			errs = append(errs, err)
+		err := g.sync(vol, opts)
+		if handledErr := g.afterSync(vol, opts, err); handledErr != nil {
+			errs = append(errs, handledErr)
 		}
 	}
 
+	return g.afterAllSync(errs)
+}
+
+func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
+	return nil
+}
+
+func (g *GitVolume) afterAllSync(errs []error) error {
 	return errors.Join(errs...)
 }
 
@@ -70,7 +79,19 @@ func (g *GitVolume) beforeSync(vol Volume) error {
 
 func (g *GitVolume) sync(vol Volume, opts SyncOptions) error {
 	if opts.DryRun {
-		displaySource := vol.DisplaySource()
+		return nil
+	}
+	return g.applyVolume(vol, opts)
+}
+
+func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error) error {
+	displaySource := vol.DisplaySource()
+
+	if err != nil {
+		return err
+	}
+
+	if opts.DryRun {
 		action := "link"
 		if vol.Mode == ModeCopy {
 			action = "copy"
@@ -79,33 +100,28 @@ func (g *GitVolume) sync(vol Volume, opts SyncOptions) error {
 		return nil
 	}
 
-	return g.applyVolume(vol, opts)
-}
-
-func (g *GitVolume) afterSync(vol Volume) error {
-	return nil
-}
-
-func (g *GitVolume) applyVolume(vol Volume, opts SyncOptions) error {
-	displaySource := vol.DisplaySource()
-
-	if vol.Mode == ModeCopy {
-		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
-			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
-		}
-		if g.verbose && !g.quiet {
+	if g.verbose && !g.quiet {
+		if vol.Mode == ModeCopy {
 			fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
-		}
-	} else {
-		if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
-			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
-		}
-		if g.verbose && !g.quiet {
+		} else {
 			linkType := "absolute"
 			if opts.RelativeLinks {
 				linkType = "relative"
 			}
 			fmt.Printf("✓ Linked (%s) %s -> %s\n", linkType, displaySource, vol.Target)
+		}
+	}
+	return nil
+}
+
+func (g *GitVolume) applyVolume(vol Volume, opts SyncOptions) error {
+	if vol.Mode == ModeCopy {
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, vol.Force); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+	} else {
+		if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
+			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
 		}
 	}
 	return nil

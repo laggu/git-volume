@@ -14,24 +14,33 @@ type UnsyncOptions struct {
 
 // Unsync removes the volumes from the target workspace
 func (g *GitVolume) Unsync(opts UnsyncOptions) error {
+	if err := g.beforeAllUnsync(opts); err != nil {
+		return err
+	}
+
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
 		if err := g.beforeUnsync(vol); err != nil {
+			g.afterUnsync(vol, opts, err)
 			errs = append(errs, err)
 			continue
 		}
 
-		if err := g.unsync(vol, opts); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		if err := g.afterUnsync(vol); err != nil {
-			errs = append(errs, err)
+		err := g.unsync(vol, opts)
+		if handledErr := g.afterUnsync(vol, opts, err); handledErr != nil {
+			errs = append(errs, handledErr)
 		}
 	}
 
+	return g.afterAllUnsync(errs)
+}
+
+func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
+	return nil
+}
+
+func (g *GitVolume) afterAllUnsync(errs []error) error {
 	return errors.Join(errs...)
 }
 
@@ -71,8 +80,8 @@ func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 	return g.removeVolume(vol)
 }
 
-func (g *GitVolume) afterUnsync(vol Volume) error {
-	return nil
+func (g *GitVolume) afterUnsync(vol Volume, opts UnsyncOptions, err error) error {
+	return err
 }
 
 func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {

@@ -17,13 +17,13 @@ type AddOptions struct {
 
 // GlobalAdd copies files to the global git-volume directory
 func (g *GitVolume) GlobalAdd(files []string, opts AddOptions) error {
-	if err := g.validateGlobalAdd(files, opts); err != nil {
+	if err := g.beforeAllAdd(files, opts); err != nil {
 		return err
 	}
 	return g.executeGlobalAdd(files, opts)
 }
 
-func (g *GitVolume) validateGlobalAdd(files []string, opts AddOptions) error {
+func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
 	// Validate: --as can only be used with single file
 	if opts.As != "" && len(files) > 1 {
 		return fmt.Errorf("--as can only be used with a single file")
@@ -58,20 +58,21 @@ func (g *GitVolume) executeGlobalAdd(files []string, opts AddOptions) error {
 	for _, file := range files {
 		targetPath, err := g.beforeAdd(file, opts)
 		if err != nil {
+			g.afterAdd(file, "", opts, err)
 			errs = append(errs, err)
 			continue
 		}
 
-		if err := g.add(file, targetPath, opts); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		if err := g.afterAdd(file, targetPath, opts); err != nil {
-			errs = append(errs, err)
+		err = g.add(file, targetPath, opts)
+		if handledErr := g.afterAdd(file, targetPath, opts, err); handledErr != nil {
+			errs = append(errs, handledErr)
 		}
 	}
 
+	return g.afterAllAdd(errs)
+}
+
+func (g *GitVolume) afterAllAdd(errs []error) error {
 	return errors.Join(errs...)
 }
 
@@ -170,7 +171,11 @@ func (g *GitVolume) add(file, dstPath string, opts AddOptions) error {
 	return nil
 }
 
-func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions) error {
+func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error) error {
+	if err != nil {
+		return err
+	}
+
 	if !g.quiet {
 		displayDst := "@global/" + strings.TrimPrefix(dstPath, g.ctx.GlobalDir+"/")
 		// Fix display path if separator is different
