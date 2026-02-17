@@ -15,10 +15,6 @@ type SyncOptions struct {
 
 // Sync applies the volumes to the target workspace
 func (g *GitVolume) Sync(opts SyncOptions) error {
-	if err := g.beforeAllSync(opts); err != nil {
-		return err
-	}
-
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
@@ -30,10 +26,6 @@ func (g *GitVolume) Sync(opts SyncOptions) error {
 	}
 
 	return g.afterAllSync(errs)
-}
-
-func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
-	return nil
 }
 
 func (g *GitVolume) afterAllSync(errs []error) error {

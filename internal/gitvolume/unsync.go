@@ -14,10 +14,6 @@ type UnsyncOptions struct {
 
 // Unsync removes the volumes from the target workspace
 func (g *GitVolume) Unsync(opts UnsyncOptions) error {
-	if err := g.beforeAllUnsync(opts); err != nil {
-		return err
-	}
-
 	var errs []error
 
 	for _, vol := range g.ctx.Volumes {
@@ -29,10 +25,6 @@ func (g *GitVolume) Unsync(opts UnsyncOptions) error {
 	}
 
 	return g.afterAllUnsync(errs)
-}
-
-func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
-	return nil
 }
 
 func (g *GitVolume) afterAllUnsync(errs []error) error {
