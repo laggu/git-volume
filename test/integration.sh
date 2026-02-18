@@ -323,6 +323,68 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# Test: unsync copy directory
+# -----------------------------------------------------------------------------
+log "TEST" "Testing 'unsync' copy directory..."
+
+# Create source directory with files
+mkdir -p src_dir/nested
+echo "FILE_A" > src_dir/a.txt
+echo "FILE_B" > src_dir/nested/b.txt
+
+# Update config for directory copy
+cat > git-volume.yaml <<EOF
+volumes:
+  - mount: "src_dir:copied_dir"
+    mode: copy
+EOF
+
+# Sync
+"$GV_BIN" sync -q
+
+# Verify directory was copied
+if [[ -d "copied_dir" && -f "copied_dir/a.txt" && -f "copied_dir/nested/b.txt" ]]; then
+    pass "sync created copy directory correctly"
+else
+    fail "sync failed to copy directory"
+fi
+
+# Unsync (unmodified directory should be removed)
+"$GV_BIN" unsync -q
+
+if [[ ! -d "copied_dir" ]]; then
+    pass "unsync removed copy directory"
+else
+    fail "unsync failed to remove copy directory"
+fi
+
+# Test: unsync preserves modified copy directory
+log "TEST" "Testing 'unsync' preserves modified copy directory..."
+
+# Re-sync
+"$GV_BIN" sync -q
+
+# Modify a file inside the copied directory
+echo "MODIFIED" > copied_dir/a.txt
+
+# Unsync
+"$GV_BIN" unsync -q
+
+if [[ -d "copied_dir" ]]; then
+    CONTENT=$(cat copied_dir/a.txt)
+    if [[ "$CONTENT" == "MODIFIED" ]]; then
+        pass "unsync preserved modified copy directory"
+    else
+        fail "unsync changed modified copy directory content"
+    fi
+else
+    fail "unsync deleted modified copy directory"
+fi
+
+# Clean up for next tests
+rm -rf copied_dir
+
+# -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
 echo ""

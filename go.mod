@@ -3,6 +3,7 @@ module github.com/laggu/git-volume
 go 1.23.0
 
 require (
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -10,7 +11,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

@@ -111,10 +111,24 @@ func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {
 	}
 
 	if vol.Mode == ModeCopy {
-		// Copy Mode: Check Hash
+		// Copy Mode: Check content hash (file or directory)
+		srcInfo, err := os.Stat(vol.SourcePath)
+		if err != nil {
+			return false, fmt.Errorf("could not verify content (source missing?)")
+		}
+		if srcInfo.IsDir() {
+			if !info.IsDir() {
+				return false, nil // type mismatch: source is dir but target is not
+			}
+			match, err := verifyDirHash(vol.SourcePath, vol.TargetPath)
+			if err != nil {
+				return false, fmt.Errorf("could not verify directory hash: %w", err)
+			}
+			return match, nil
+		}
 		match, err := verifyHash(vol.SourcePath, vol.TargetPath)
 		if err != nil {
-			return false, fmt.Errorf("could not verify hash (source missing?)")
+			return false, fmt.Errorf("could not verify file hash: %w", err)
 		}
 		return match, nil
 	}
@@ -137,9 +151,21 @@ func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {
 }
 
 func (g *GitVolume) removeVolume(vol Volume) error {
-	if err := os.Remove(vol.TargetPath); err != nil {
-		return fmt.Errorf("failed to remove %s: %w", vol.TargetPath, err)
+	info, err := os.Lstat(vol.TargetPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat %s: %w", vol.TargetPath, err)
 	}
+
+	if info.IsDir() {
+		if err := os.RemoveAll(vol.TargetPath); err != nil {
+			return fmt.Errorf("failed to remove directory %s: %w", vol.TargetPath, err)
+		}
+	} else {
+		if err := os.Remove(vol.TargetPath); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", vol.TargetPath, err)
+		}
+	}
+
 	if !g.quiet {
 		fmt.Printf("✓ Removed %s\n", vol.Target)
 	}
