@@ -261,6 +261,66 @@ fi
 unset EDITOR
 
 # -----------------------------------------------------------------------------
+# Test: global remove
+# -----------------------------------------------------------------------------
+log "TEST" "Testing 'global remove' command..."
+
+# Helper for global remove test
+mkdir -p "$TEST_DIR/.git-volume/subdir"
+touch "$TEST_DIR/.git-volume/file1"
+touch "$TEST_DIR/.git-volume/subdir/file2"
+touch "$TEST_DIR/.git-volume/subdir/file3"
+
+# Test 1: Remove single file
+"$GV_BIN" global remove file1
+if [[ ! -f "$TEST_DIR/.git-volume/file1" ]]; then
+    pass "global remove removed single file"
+else
+    fail "global remove failed to remove single file"
+fi
+
+# Test 2: Remove file in subdir
+"$GV_BIN" global remove subdir/file2
+if [[ ! -f "$TEST_DIR/.git-volume/subdir/file2" ]]; then
+    pass "global remove removed file in subdir"
+else
+    fail "global remove failed to remove file in subdir"
+fi
+
+# Test 3: Ensure subdir still exists (file3 remains)
+if [[ -d "$TEST_DIR/.git-volume/subdir" ]]; then
+    pass "global remove preserved non-empty subdir"
+else
+    fail "global remove removed non-empty subdir"
+fi
+
+# Test 4: Remove last file in subdir (expect subdir cleanup)
+"$GV_BIN" global remove subdir/file3
+if [[ ! -f "$TEST_DIR/.git-volume/subdir/file3" ]]; then
+    if [[ ! -d "$TEST_DIR/.git-volume/subdir" ]]; then
+        pass "global remove cleanup empty parent directory"
+    else
+        fail "global remove failed to cleanup empty parent directory"
+    fi
+else
+    fail "global remove failed to remove last file"
+fi
+
+# Test 5: Try to remove non-existent file
+if ! "$GV_BIN" global remove non_existent >/dev/null 2>&1; then
+    pass "global remove failed for non-existent file (expected)"
+else
+    fail "global remove succeeded for non-existent file (unexpected)"
+fi
+
+# Test 6: Path traversal attempt
+if ! "$GV_BIN" global remove ../outside_file >/dev/null 2>&1; then
+    pass "global remove blocked path traversal (expected)"
+else
+    fail "global remove allowed path traversal (unexpected)"
+fi
+
+# -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
 echo ""
