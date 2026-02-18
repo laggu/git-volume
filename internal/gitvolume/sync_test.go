@@ -71,7 +71,7 @@ func TestGitVolume_Sync_CopyDirectory(t *testing.T) {
 	assert.Equal(t, "A=1", string(data))
 }
 
-func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwrites(t *testing.T) {
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetProtection(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -82,24 +82,30 @@ func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwrites(t *testing.T) {
 
 	targetConfigDir := filepath.Join(targetDir, "config")
 	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+	// Create an existing file that should be protected
+	existingFile := filepath.Join(targetConfigDir, "app.env")
+	require.NoError(t, os.WriteFile(existingFile, []byte("OLD"), 0644))
 
 	volumes := []Volume{
 		{Source: "config", Target: "config", Mode: ModeCopy},
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	// Should succeed and overwrite because we always overwrite now
+	// Should fail because target "config" directory exists and contains files not managed by us
+	// Wait, if target is a directory, do we check if it's a symlink?
+	// The code checks: `if targetInfo.Mode()&os.ModeSymlink == 0`
+	// "config" directory is NOT a symlink. So it should return error.
 	err := gv.Sync(SyncOptions{})
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists and is not a symlink")
 
-	// Verify content was updated
-	data, err := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	// Verify content was NOT updated (Protected)
+	data, err := os.ReadFile(existingFile)
 	require.NoError(t, err)
-	assert.Equal(t, "A=1", string(data))
+	assert.Equal(t, "OLD", string(data))
 }
 
-func TestGitVolume_Sync_Link_ExistingTargetOverwrites(t *testing.T) {
+func TestGitVolume_Sync_Link_ExistingTargetProtection(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -107,22 +113,26 @@ func TestGitVolume_Sync_Link_ExistingTargetOverwrites(t *testing.T) {
 	targetPath := filepath.Join(targetDir, "link1.txt")
 	require.NoError(t, os.WriteFile(targetPath, []byte("existing content"), 0644))
 
-	// Try sync - should succeed (rename/remove logic)
+	// Try sync - should FAIL (protection)
 	volumes := []Volume{
 		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	err := gv.Sync(SyncOptions{})
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists and is not a symlink")
 
-	// Verify it's now a symlink
+	// Verify it's still the original file
 	info, err := os.Lstat(targetPath)
 	require.NoError(t, err)
-	assert.True(t, info.Mode()&os.ModeSymlink != 0, "target should be replaced with symlink")
+	assert.True(t, info.Mode()&os.ModeSymlink == 0, "target should remain a regular file")
+
+	content, _ := os.ReadFile(targetPath)
+	assert.Equal(t, "existing content", string(content))
 }
 
-func TestGitVolume_Sync_Link_ExistingDirectoryOverwrites(t *testing.T) {
+func TestGitVolume_Sync_Link_ExistingDirectoryProtection(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -131,19 +141,20 @@ func TestGitVolume_Sync_Link_ExistingDirectoryOverwrites(t *testing.T) {
 	require.NoError(t, os.Mkdir(targetPath, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(targetPath, "subfile.txt"), []byte("sub"), 0644))
 
-	// Sync - should succeed (remove directory and symlink)
+	// Sync - should FAIL (protection)
 	volumes := []Volume{
 		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	err := gv.Sync(SyncOptions{})
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists and is not a symlink")
 
-	// Verify it's now a symlink
+	// Verify it's still a directory
 	info, err := os.Lstat(targetPath)
 	require.NoError(t, err)
-	assert.True(t, info.Mode()&os.ModeSymlink != 0, "target directory should be replaced with symlink")
+	assert.True(t, info.IsDir(), "target should remain a directory")
 }
 
 func TestGitVolume_Sync_Transition_LinkToCopy(t *testing.T) {

@@ -97,6 +97,23 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 		return nil
 	}
 
+	// Check if target exists and is safe to overwrite
+	if _, err := os.Lstat(vol.TargetPath); err == nil {
+		// Target exists, check if it's a symlink (safe to remove)
+		// We allow overwriting symlinks because they are likely created by us (or user wants to replace them)
+		// But we DO NOT overwrite regular files or directories to prevent data loss.
+		targetInfo, err := os.Lstat(vol.TargetPath)
+		if err != nil {
+			return fmt.Errorf("failed to check target %s: %w", vol.Target, err)
+		}
+
+		if targetInfo.Mode()&os.ModeSymlink == 0 {
+			// It is NOT a symlink (regular file or directory)
+			// For safety, we skip this volume and report an error.
+			return fmt.Errorf("target %s already exists and is not a symlink (skipping to prevent data loss)", vol.Target)
+		}
+	}
+
 	// Delete-and-Recreate strategy (Idempotency):
 	// ensuring the target state exactly matches the source state.
 	// We always remove the target path before syncing to guarantees a clean slate.
@@ -163,7 +180,7 @@ func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo) error {
 
 // syncLink handles link mode synchronization
 func (g *GitVolume) syncLink(src, dst string, relativeLink bool) error {
-		// Ensure parent directory exists
+	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(dst), DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
