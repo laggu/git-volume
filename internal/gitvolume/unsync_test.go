@@ -258,3 +258,96 @@ func TestGitVolume_Unsync_RelativeLink(t *testing.T) {
 	_, err = os.Lstat(linkPath)
 	assert.True(t, os.IsNotExist(err), "Relative link should be correctly identified and removed")
 }
+
+func TestGitVolume_Unsync_CopyDirectory(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// Create source directory with files
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "db.env"), []byte("B=2"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	// Sync
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Verify synced
+	targetConfig := filepath.Join(targetDir, "config")
+	_, err := os.Stat(filepath.Join(targetConfig, "app.env"))
+	require.NoError(t, err, "app.env should exist after sync")
+	_, err = os.Stat(filepath.Join(targetConfig, "db.env"))
+	require.NoError(t, err, "db.env should exist after sync")
+
+	// Unsync
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	// Verify directory is completely removed
+	_, err = os.Stat(targetConfig)
+	assert.True(t, os.IsNotExist(err), "config directory should be removed after unsync")
+}
+
+func TestGitVolume_Unsync_CopyDirectory_Modified(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// Create source directory
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	// Sync
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Modify a file inside the copied directory
+	modifiedPath := filepath.Join(targetDir, "config", "app.env")
+	require.NoError(t, os.WriteFile(modifiedPath, []byte("MODIFIED"), 0644))
+
+	// Unsync
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	// Verify directory was preserved (hash mismatch → skip)
+	_, err := os.Stat(filepath.Join(targetDir, "config"))
+	assert.NoError(t, err, "Modified config directory should NOT be removed")
+
+	data, _ := os.ReadFile(modifiedPath)
+	assert.Equal(t, "MODIFIED", string(data), "Modified file content should be preserved")
+}
+
+func TestGitVolume_Unsync_CopyDirectory_MissingSource(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// Create source directory
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	// Sync
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Delete source directory
+	require.NoError(t, os.RemoveAll(configDir))
+
+	// Unsync
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	// Verify target directory was NOT removed (source missing → safe skip)
+	_, err := os.Stat(filepath.Join(targetDir, "config"))
+	assert.NoError(t, err, "Config directory should NOT be removed if source is missing")
+}
