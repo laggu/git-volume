@@ -113,7 +113,6 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
 		}
 	} else {
-		// Target is already removed by previous step
 		if err := g.syncLink(vol.SourcePath, vol.TargetPath, opts.RelativeLinks); err != nil {
 			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
 		}
@@ -164,9 +163,7 @@ func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo) error {
 
 // syncLink handles link mode synchronization
 func (g *GitVolume) syncLink(src, dst string, relativeLink bool) error {
-	// Target is already removed applyVolume
-
-	// Ensure parent directory exists
+		// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(dst), DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}

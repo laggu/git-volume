@@ -23,7 +23,6 @@ This makes the files available to be mounted via @global/ prefix in git-volume.y
 
 Examples:
   git volume global add .env
-  git volume global add .env
   git volume global add secrets/api.key
 
   # Save with a different name/path (single file only)
