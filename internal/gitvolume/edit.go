@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/google/shlex"
 )
 
 // GlobalEdit opens a file from the global git-volume directory in the default editor
@@ -50,10 +52,15 @@ func (g *GitVolume) beforeEdit(file string) (targetPath, editor string, err erro
 }
 
 func (g *GitVolume) edit(targetPath, editor string) error {
-	// Open editor using sh -c to support arguments in EDITOR variable
-	// We use strict quoting for the file path to handle spaces correctly
-	cmdStr := fmt.Sprintf("%s \"$1\"", editor)
-	cmd := exec.Command("sh", "-c", cmdStr, "--", targetPath)
+	parts, err := shlex.Split(editor)
+	if err != nil {
+		return fmt.Errorf("failed to parse EDITOR value %q: %w", editor, err)
+	}
+	if len(parts) == 0 {
+		return fmt.Errorf("invalid EDITOR value: empty command")
+	}
+
+	cmd := exec.Command(parts[0], append(parts[1:], targetPath)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
