@@ -48,6 +48,8 @@ cd project
 
 # Initialize git repository (required for git-volume)
 git init -q
+git config user.name "test"
+git config user.email "test@test.com"
 
 "$GV_BIN" init -q
 if [[ -d "$TEST_DIR/.git-volume" && -f "git-volume.yaml" ]]; then
