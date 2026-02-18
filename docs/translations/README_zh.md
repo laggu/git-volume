@@ -75,7 +75,7 @@ volumes:
   # 带有选项的格式
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (默认) 或 copy
-    force: true    # 如果已存在则覆盖
+
 ```
 
 ### 模式对比

@@ -71,7 +71,7 @@ func TestGitVolume_Sync_CopyDirectory(t *testing.T) {
 	assert.Equal(t, "A=1", string(data))
 }
 
-func TestGitVolume_Sync_CopyDirectory_ExistingTargetMergesWithoutOverwriteWhenNotForce(t *testing.T) {
+func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwrites(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -89,42 +89,17 @@ func TestGitVolume_Sync_CopyDirectory_ExistingTargetMergesWithoutOverwriteWhenNo
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	require.NoError(t, gv.Sync(SyncOptions{}))
+	// Should succeed and overwrite because we always overwrite now
+	err := gv.Sync(SyncOptions{})
+	require.NoError(t, err)
 
-	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
-	require.NoError(t, readErr)
-	assert.Equal(t, "OLD", string(data))
-
-	newData, newReadErr := os.ReadFile(filepath.Join(targetDir, "config", "new.env"))
-	require.NoError(t, newReadErr)
-	assert.Equal(t, "NEW", string(newData))
-}
-
-func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwritesWhenForce(t *testing.T) {
-	sourceDir, targetDir, cleanup := setupTestEnv(t)
-	defer cleanup()
-
-	configDir := filepath.Join(sourceDir, "config")
-	require.NoError(t, os.MkdirAll(configDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
-
-	targetConfigDir := filepath.Join(targetDir, "config")
-	require.NoError(t, os.MkdirAll(targetConfigDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
-
-	volumes := []Volume{
-		{Source: "config", Target: "config", Mode: ModeCopy, Force: true},
-	}
-	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
-
-	require.NoError(t, gv.Sync(SyncOptions{}))
-
-	data, readErr := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
-	require.NoError(t, readErr)
+	// Verify content was updated
+	data, err := os.ReadFile(filepath.Join(targetDir, "config", "app.env"))
+	require.NoError(t, err)
 	assert.Equal(t, "A=1", string(data))
 }
 
-func TestGitVolume_Sync_Force(t *testing.T) {
+func TestGitVolume_Sync_Link_ExistingTargetOverwrites(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -132,28 +107,22 @@ func TestGitVolume_Sync_Force(t *testing.T) {
 	targetPath := filepath.Join(targetDir, "link1.txt")
 	require.NoError(t, os.WriteFile(targetPath, []byte("existing content"), 0644))
 
-	// Try sync without force - should fail
+	// Try sync - should succeed (rename/remove logic)
 	volumes := []Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink, Force: false},
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
 	err := gv.Sync(SyncOptions{})
-	assert.Error(t, err, "expected error when target exists and force is false")
-
-	// Sync with force - should succeed
-	volumes[0].Force = true
-	gv = createTestGitVolume(sourceDir, targetDir, "", volumes)
-
-	require.NoError(t, gv.Sync(SyncOptions{}), "Sync with force failed")
+	assert.NoError(t, err)
 
 	// Verify it's now a symlink
 	info, err := os.Lstat(targetPath)
 	require.NoError(t, err)
-	assert.True(t, info.Mode()&os.ModeSymlink != 0, "link1.txt should be symlink after forced sync")
+	assert.True(t, info.Mode()&os.ModeSymlink != 0, "target should be replaced with symlink")
 }
 
-func TestGitVolume_Sync_ExistingDirectory(t *testing.T) {
+func TestGitVolume_Sync_Link_ExistingDirectoryOverwrites(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -162,18 +131,47 @@ func TestGitVolume_Sync_ExistingDirectory(t *testing.T) {
 	require.NoError(t, os.Mkdir(targetPath, 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(targetPath, "subfile.txt"), []byte("sub"), 0644))
 
-	// Sync with force - should remove directory and create symlink
+	// Sync - should succeed (remove directory and symlink)
 	volumes := []Volume{
-		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink, Force: true},
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
 	}
 	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
 
-	require.NoError(t, gv.Sync(SyncOptions{}), "Sync failed to replace directory")
+	err := gv.Sync(SyncOptions{})
+	assert.NoError(t, err)
 
 	// Verify it's now a symlink
 	info, err := os.Lstat(targetPath)
 	require.NoError(t, err)
-	assert.True(t, info.Mode()&os.ModeSymlink != 0, "link1.txt should be symlink after replacing directory")
+	assert.True(t, info.Mode()&os.ModeSymlink != 0, "target directory should be replaced with symlink")
+}
+
+func TestGitVolume_Sync_Transition_LinkToCopy(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// 1. Sync as Link
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "file.txt", Mode: ModeLink},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Verify symlink
+	info, err := os.Lstat(filepath.Join(targetDir, "file.txt"))
+	require.NoError(t, err)
+	assert.True(t, info.Mode()&os.ModeSymlink != 0)
+
+	// 2. Sync as Copy
+	volumes[0].Mode = ModeCopy
+	gv = createTestGitVolume(sourceDir, targetDir, "", volumes)
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Verify file (not symlink)
+	info, err = os.Lstat(filepath.Join(targetDir, "file.txt"))
+	require.NoError(t, err)
+	assert.True(t, info.Mode()&os.ModeSymlink == 0, "Symlink should be replaced by regular file")
+	assert.True(t, info.Mode().IsRegular())
 }
 
 func TestGitVolume_Sync_DryRun(t *testing.T) {

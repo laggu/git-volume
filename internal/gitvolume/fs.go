@@ -48,13 +48,16 @@ func copyFile(src, dst string) error {
 	return dstFile.Close()
 }
 
-func copyDirNoSymlink(src, dst string, force bool) error {
+// copyDir recursively copies a directory tree.
+// It explicitly prohibits symlinks in the source directory for security reasons,
+// to prevent potential path traversal or circular reference attacks.
+func copyDir(src, dst string) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", src)
+		return fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
 	}
 
 	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
@@ -75,7 +78,7 @@ func copyDirNoSymlink(src, dst string, force bool) error {
 			return err
 		}
 		if entryInfo.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("source directory contains a symlink, which is not allowed for security reasons: %s", srcPath)
+			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", srcPath)
 		}
 
 		if entryInfo.IsDir() {
@@ -85,15 +88,20 @@ func copyDirNoSymlink(src, dst string, force bool) error {
 				return err
 			}
 
-			if err := copyDirNoSymlink(srcPath, dstPath, force); err != nil {
+			if err := copyDir(srcPath, dstPath); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if _, err := os.Lstat(dstPath); err == nil {
-			if !force {
-				continue
+		// If target exists, verify it's a regular file or symlink
+		if info, err := os.Lstat(dstPath); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				if err := os.Remove(dstPath); err != nil {
+					return fmt.Errorf("failed to remove existing symlink: %w", err)
+				}
+			} else if !info.Mode().IsRegular() {
+				return fmt.Errorf("target exists and is not a regular file: %s", dstPath)
 			}
 		} else if !os.IsNotExist(err) {
 			return err

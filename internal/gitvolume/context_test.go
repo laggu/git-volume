@@ -36,12 +36,11 @@ volumes:
 volumes:
   - mount: "secrets/prod.key:app.key"
     mode: "copy"
-    force: true
   - mount: "configs/base.yaml:config.yaml"
 `,
 			want: []Volume{
-				{Source: "secrets/prod.key", Target: "app.key", Mode: ModeCopy, Force: true},
-				{Source: "configs/base.yaml", Target: "config.yaml", Mode: ModeLink, Force: false},
+				{Source: "secrets/prod.key", Target: "app.key", Mode: ModeCopy},
+				{Source: "configs/base.yaml", Target: "config.yaml", Mode: ModeLink},
 			},
 			wantErr: false,
 		},
@@ -127,10 +126,9 @@ volumes:
 volumes:
   - mount: "@global/secrets/prod.key:config/key"
     mode: "copy"
-    force: true
 `,
 			want: []Volume{
-				{Source: "secrets/prod.key", Target: "config/key", Mode: ModeCopy, Force: true, IsGlobal: true},
+				{Source: "secrets/prod.key", Target: "config/key", Mode: ModeCopy, IsGlobal: true},
 			},
 			wantErr: false,
 		},

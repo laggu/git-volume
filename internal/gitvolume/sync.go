@@ -96,7 +96,28 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 	if opts.DryRun {
 		return nil
 	}
-	return g.applyVolume(vol, srcInfo, opts)
+
+	// Delete-and-Recreate strategy (Idempotency):
+	// ensuring the target state exactly matches the source state.
+	// We always remove the target path before syncing to guarantees a clean slate.
+	// This approach handles several edge cases automatically:
+	// 1. Switching between file and directory (e.g., symlink to directory)
+	// 2. Switching modes (copy <-> link)
+	// 3. Removing stale files in directories (mirroring) when switching from a directory that had extra files.
+	if err := os.RemoveAll(vol.TargetPath); err != nil {
+		return fmt.Errorf("failed to clean target %s: %w", vol.Target, err)
+	}
+
+	if vol.Mode == ModeCopy {
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, srcInfo); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+	} else {
+		if err := g.syncLink(vol.SourcePath, vol.TargetPath, opts.RelativeLinks); err != nil {
+			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+	}
+	return nil
 }
 
 func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]error) {
@@ -132,86 +153,17 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]e
 	}
 }
 
-func (g *GitVolume) applyVolume(vol Volume, srcInfo os.FileInfo, opts SyncOptions) error {
-	if vol.Mode == ModeCopy {
-		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, srcInfo, vol.Force); err != nil {
-			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
-		}
-	} else {
-		if err := g.syncLink(vol.SourcePath, vol.TargetPath, vol.Force, opts.RelativeLinks); err != nil {
-			return fmt.Errorf("failed to link %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
-		}
-	}
-	return nil
-}
-
 // syncCopy handles copy mode synchronization
-func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo, force bool) error {
+func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo) error {
 	if srcInfo.IsDir() {
-		if dstInfo, err := os.Lstat(dst); err == nil {
-			if !dstInfo.IsDir() {
-				return fmt.Errorf("target exists and is not a directory")
-			}
-		} else if !os.IsNotExist(err) {
-			return err
-		}
-
-		return copyDirNoSymlink(src, dst, force)
+		return copyDir(src, dst)
 	}
-
-	// Check exist
-	if info, err := os.Stat(dst); err == nil {
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("target exists and is not a regular file")
-		}
-		// Calculate hash to see if identical
-		match, err := verifyHash(src, dst)
-		if err != nil {
-			return err
-		}
-		if match {
-			return nil // Already synced
-		}
-		if !force {
-			return fmt.Errorf("target exists and differs from source (use force: true to overwrite)")
-		}
-	}
-
 	return copyFile(src, dst)
 }
 
 // syncLink handles link mode synchronization
-func (g *GitVolume) syncLink(src, dst string, force bool, relativeLink bool) error {
-	// Check file existence
-	if info, err := os.Lstat(dst); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			currentTarget, err := os.Readlink(dst)
-			if err == nil {
-				// Resolve relative symlink based on symlink's parent directory
-				if !filepath.IsAbs(currentTarget) {
-					currentTarget = filepath.Join(filepath.Dir(dst), currentTarget)
-				}
-				if pathsEqual(currentTarget, src) {
-					return nil // Already linked correctly
-				}
-			}
-		}
-		if !force {
-			return fmt.Errorf("target exists (use force: true to overwrite)")
-		}
-		// Remove existing to create link
-		if info.IsDir() {
-			if err := os.RemoveAll(dst); err != nil {
-				return fmt.Errorf("failed to remove existing directory %s: %w", dst, err)
-			}
-		} else {
-			if err := os.Remove(dst); err != nil {
-				return fmt.Errorf("failed to remove existing target %s: %w", dst, err)
-			}
-		}
-	}
-
-	// Ensure parent directory exists
+func (g *GitVolume) syncLink(src, dst string, relativeLink bool) error {
+		// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(dst), DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
