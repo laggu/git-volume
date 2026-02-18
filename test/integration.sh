@@ -234,6 +234,33 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# Test: global edit
+# -----------------------------------------------------------------------------
+log "TEST" "Testing 'global edit' command..."
+
+# Setup global file if not exists
+if [[ ! -f "$TEST_DIR/.git-volume/global_source.txt" ]]; then
+    echo "GLOBAL_SECRET" > "$TEST_DIR/.git-volume/global_source.txt"
+fi
+
+# Edit file using mocked EDITOR
+# We use a simple script that appends text
+export EDITOR="sh -c 'printf \" - EDITED\" >> \"\$1\"' --"
+"$GV_BIN" global edit global_source.txt
+
+# Verify content
+CONTENT=$(cat "$TEST_DIR/.git-volume/global_source.txt")
+# Tricky: echo adds newline, printf might not depending on implementation
+# Let's just check if it contains the edited string
+if grep -q "EDITED" "$TEST_DIR/.git-volume/global_source.txt"; then
+    pass "global edit modified file correctly"
+else
+    fail "global edit failed to modify file"
+    echo "Content: $CONTENT"
+fi
+unset EDITOR
+
+# -----------------------------------------------------------------------------
 # Test: global remove
 # -----------------------------------------------------------------------------
 log "TEST" "Testing 'global remove' command..."
