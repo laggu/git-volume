@@ -385,6 +385,68 @@ fi
 rm -rf copied_dir
 
 # -----------------------------------------------------------------------------
+# Test: Error Visibility (Bad Flag)
+# -----------------------------------------------------------------------------
+log "TEST" "Testing Error Visibility (Bad Flag)..."
+
+# Capture stdout and stderr
+if OUTPUT=$("$GV_BIN" sync --unknown-flag 2>&1); then
+    fail "Command should have failed but succeeded"
+else
+    # Command failed as expected, check output for error message
+    if grep -q "unknown flag: --unknown-flag" <<< "$OUTPUT"; then
+        pass "Error message visible on stderr/stdout"
+    else
+        fail "Error message NOT found in output"
+        echo "Output: $OUTPUT"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# Test: Sync Dry Run Isolation
+# -----------------------------------------------------------------------------
+log "TEST" "Testing Sync Dry Run..."
+
+# Set up a volume to sync
+echo "DATA" > source.txt
+cat > git-volume.yaml <<EOF
+volumes:
+  - mount: "source.txt:target.txt"
+    mode: copy
+EOF
+git add git-volume.yaml >/dev/null 2>&1
+git commit -m "init" >/dev/null 2>&1
+
+# Run sync with dry-run
+"$GV_BIN" sync --dry-run >/dev/null
+
+if [[ ! -f "target.txt" ]]; then
+    pass "sync --dry-run did not create file"
+else
+    fail "sync --dry-run CREATED file (meant to be dry run)"
+fi
+
+# -----------------------------------------------------------------------------
+# Test: Unsync Dry Run Isolation
+# -----------------------------------------------------------------------------
+log "TEST" "Testing Unsync Dry Run..."
+
+# Actually sync first
+"$GV_BIN" sync >/dev/null
+if [[ ! -f "target.txt" ]]; then
+    fail "Setup failed: sync did not create file"
+fi
+
+# Run unsync with dry-run
+"$GV_BIN" unsync --dry-run >/dev/null
+
+if [[ -f "target.txt" ]]; then
+    pass "unsync --dry-run did not remove file"
+else
+    fail "unsync --dry-run REMOVED file (meant to be dry run)"
+fi
+
+# -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
 echo ""

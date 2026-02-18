@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// unsyncDryRun is the local flag for the unsync command
+var unsyncDryRun bool
+
 // unsyncCmd represents the unsync command
 var unsyncCmd = &cobra.Command{
 	Use:   "unsync",
@@ -29,12 +32,12 @@ to the source before deleting. If changed, it skips deletion to prevent data los
 		}
 
 		return gv.Unsync(gitvolume.UnsyncOptions{
-			DryRun: dryRun,
+			DryRun: unsyncDryRun,
 		})
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(unsyncCmd)
-	unsyncCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
+	unsyncCmd.Flags().BoolVar(&unsyncDryRun, "dry-run", false, "show what would be done without making changes")
 }

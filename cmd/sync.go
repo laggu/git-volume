@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	dryRun        bool
+	syncDryRun    bool
 	relativeLinks bool
 )
 
@@ -34,7 +34,7 @@ it looks for it in the main Git worktree (inheritance).`,
 		}
 
 		return gv.Sync(gitvolume.SyncOptions{
-			DryRun:        dryRun,
+			DryRun:        syncDryRun,
 			RelativeLinks: relativeLinks,
 		})
 	},
@@ -42,6 +42,6 @@ it looks for it in the main Git worktree (inheritance).`,
 
 func init() {
 	rootCmd.AddCommand(syncCmd)
-	syncCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
+	syncCmd.Flags().BoolVar(&syncDryRun, "dry-run", false, "show what would be done without making changes")
 	syncCmd.Flags().BoolVar(&relativeLinks, "relative", false, "create relative symlinks instead of absolute")
 }
