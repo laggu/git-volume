@@ -58,12 +58,17 @@ git volume status
 
 ## 📖 명령어
 
-| 명령어              | 설명                                        |
-| ------------------- | ------------------------------------------- |
-| `git volume init`   | 글로벌 디렉토리 생성 및 샘플 설정 파일 생성 |
-| `git volume sync`   | 설정에 따라 볼륨을 현재 워크트리에 마운트   |
-| `git volume unsync` | 마운트된 볼륨 제거 (수정된 파일은 보존)     |
-| `git volume status` | 현재 볼륨 상태 표시                         |
+| 명령어                     | 설명                                        |
+| -------------------------- | ------------------------------------------- |
+| `git volume init`          | 글로벌 디렉토리 생성 및 샘플 설정 파일 생성 |
+| `git volume sync`          | 설정에 따라 볼륨을 현재 워크트리에 마운트   |
+| `git volume unsync`        | 마운트된 볼륨 제거 (수정된 파일은 보존)     |
+| `git volume status`        | 현재 볼륨 상태 표시                         |
+| `git volume global add`    | 글로벌 저장소(`~/.git-volume`)에 파일 복사  |
+| `git volume global list`   | 글로벌 저장소의 파일 목록 (트리 뷰)         |
+| `git volume global edit`   | 글로벌 저장소의 파일을 `$EDITOR`로 편집     |
+| `git volume global remove` | 글로벌 저장소에서 파일 삭제 (alias: `rm`)   |
+| `git volume version`       | 버전 정보 출력                              |
 
 ## ⚙️ 설정 파일 (`git-volume.yaml`)
 
@@ -76,6 +81,12 @@ volumes:
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (기본) 또는 copy
 
+  # 글로벌 저장소에서 마운트 (~/.git-volume)
+  - "@global/secrets/prod.key:config/key"
+
+  # 디렉토리 마운트 (디렉토리 전체 복사)
+  - mount: "configs:app/configs"
+    mode: "copy"
 ```
 
 ### 모드 비교
@@ -102,10 +113,48 @@ cd ../feature-branch
 git volume sync  # 부모의 git-volume.yaml 사용
 ```
 
+## 🌐 글로벌 저장소
+
+글로벌 저장소(`~/.git-volume`)를 사용하면 `@global/` 접두사를 통해 여러 프로젝트에서 파일을 공유할 수 있습니다.
+
+```bash
+# 글로벌 저장소에 파일 추가
+git volume global add .env
+git volume global add .env.local --as .env
+git volume global add .env config.json --path myproject
+
+# 목록 확인, 편집, 삭제
+git volume global list
+git volume global edit config.json
+git volume global remove old-secret.key
+```
+
+설정 파일에서 `@global/`로 참조하여 사용합니다:
+
+```yaml
+volumes:
+  - "@global/.env:.env"
+  - mount: "@global/secrets/prod.key:config/key"
+    mode: "copy"
+```
+
+## 🔧 CLI 옵션
+
+| 플래그            | 대상 명령어      | 설명                                      |
+| ----------------- | ---------------- | ----------------------------------------- |
+| `--dry-run`       | `sync`, `unsync` | 실제 변경 없이 수행할 작업만 표시         |
+| `--relative`      | `sync`           | 절대 경로 대신 상대 경로 심볼릭 링크 생성 |
+| `--verbose`, `-v` | 전체             | 상세 출력                                 |
+| `--quiet`, `-q`   | 전체             | 에러 외 출력 숨김                         |
+| `--config`, `-c`  | 전체             | 설정 파일 경로 지정                       |
+
 ## 🛡️ 안전 장치
 
-- **Unsync 시 변경 감지**: Copy 모드로 복사된 파일이 수정되었으면 삭제하지 않고 보존
-- **멱등성**: `sync`를 여러 번 실행해도 안전
+- **심볼릭 링크 소스 차단**: `sync`와 `global add`에서 심볼릭 링크 소스를 보안상 거부
+- **경로 탐색 방지**: 모든 경로에 대해 디렉토리 이스케이프 공격 검증
+- **Unsync 시 변경 감지**: Copy 모드로 복사된 파일 및 디렉토리가 수정되었으면 보존
+- **Status 변경 감지**: 복사된 파일이 원본과 다르면 `MODIFIED`로 표시
+- **멱등성 보장**: `sync`를 여러 번 실행해도 항상 동일한 결과
 
 ## 📄 라이선스
 

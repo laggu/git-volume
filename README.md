@@ -58,12 +58,17 @@ git volume status
 
 ## 📖 Commands
 
-| Command             | Description                                              |
-| ------------------- | -------------------------------------------------------- |
-| `git volume init`   | Create global directory and sample configuration file    |
-| `git volume sync`   | Mount volumes to current worktree based on configuration |
-| `git volume unsync` | Remove mounted volumes (modified files are preserved)    |
-| `git volume status` | Display current volume status                            |
+| Command                    | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| `git volume init`          | Create global directory and sample configuration file    |
+| `git volume sync`          | Mount volumes to current worktree based on configuration |
+| `git volume unsync`        | Remove mounted volumes (modified files are preserved)    |
+| `git volume status`        | Display current volume status                            |
+| `git volume global add`    | Copy files to global storage (`~/.git-volume`)           |
+| `git volume global list`   | List files in global storage (tree view)                 |
+| `git volume global edit`   | Edit a file in global storage with `$EDITOR`             |
+| `git volume global remove` | Remove files from global storage (alias: `rm`)           |
+| `git volume version`       | Print version information                                |
 
 ## ⚙️ Configuration File (`git-volume.yaml`)
 
@@ -76,6 +81,12 @@ volumes:
   - mount: "secrets/prod.key:config/prod.key"
     mode: "copy"   # link (default) or copy
 
+  # Mount from global storage (~/.git-volume)
+  - "@global/secrets/prod.key:config/key"
+
+  # Directory mount (copies entire directory)
+  - mount: "configs:app/configs"
+    mode: "copy"
 ```
 
 ### Mode Comparison
@@ -102,12 +113,48 @@ cd ../feature-branch
 git volume sync  # uses parent's git-volume.yaml
 ```
 
+## 🌐 Global Storage
+
+Global storage (`~/.git-volume`) allows sharing files across multiple projects using the `@global/` prefix.
+
+```bash
+# Add files to global storage
+git volume global add .env
+git volume global add .env.local --as .env
+git volume global add .env config.json --path myproject
+
+# List, edit, and remove
+git volume global list
+git volume global edit config.json
+git volume global remove old-secret.key
+```
+
+Use `@global/` in your configuration to reference these files:
+
+```yaml
+volumes:
+  - "@global/.env:.env"
+  - mount: "@global/secrets/prod.key:config/key"
+    mode: "copy"
+```
+
+## 🔧 CLI Options
+
+| Flag              | Commands         | Description                                    |
+| ----------------- | ---------------- | ---------------------------------------------- |
+| `--dry-run`       | `sync`, `unsync` | Show what would be done without making changes |
+| `--relative`      | `sync`           | Create relative symlinks instead of absolute   |
+| `--verbose`, `-v` | All              | Verbose output                                 |
+| `--quiet`, `-q`   | All              | Suppress non-error output                      |
+| `--config`, `-c`  | All              | Custom config file path                        |
+
 ## 🛡️ Safety Features
 
 - **Symlink Source Rejection**: `sync` and `global add` reject symlink sources for security
-- **Change Detection on Unsync**: Files copied in copy mode are preserved if modified
-- **Change Detection on Status (Copy Mode)**: `status` reports `MODIFIED` when copied targets differ from source
-- **Idempotent**: Running `sync` multiple times is safe
+- **Path Traversal Prevention**: All paths are validated to prevent directory escape attacks
+- **Change Detection on Unsync**: Copied files and directories are preserved if modified
+- **Change Detection on Status**: `status` reports `MODIFIED` when copied targets differ from source
+- **Idempotent Sync**: Running `sync` multiple times always produces the same result
 
 ## 📄 License
 

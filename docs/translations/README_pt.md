@@ -1,17 +1,17 @@
-> 🌐 [English](../../README.md) | [한국어](README_ko.md) | [日本語](README_ja.md) | [中文](README_zh.md) | [Español](README_es.md) | [Français](README_fr.md) | [Deutsch](README_de.md) | [Italiano](README_it.md) | [Português](README_pt.md)
+> 🌐 [English](../../README.md) | [한국어](README_ko.md) | [日本語](README_ja.md) | [中文](README_zh.md) | [Español](README_es.md) | [Français](README_fr.md) | [Deutsch](README_de.md) | [Italiano](README_it.md)
 
 # git-volume
 
-> **"Mantenha o código no Git, monte o seu ambiente como volumes."**
+> **"Código no Git, ambiente como volumes."**
 
-`git-volume` é uma ferramenta CLI que gere centralizadamente ficheiros de ambiente (`.env`, segredos, etc.) entre os *worktrees* do Git e os monta dinamicamente.
+`git-volume` é uma ferramenta CLI que gerencia centralmente arquivos de ambiente (`.env`, segredos, etc.) entre árvores de trabalho Git e os monta dinamicamente.
 
-## ✨ Principais Características
+## ✨ Principais recursos
 
-- **Montagem de Volumes**: Suporta modos de ligação simbólica ou cópia de ficheiros.
-- **Herança de Configuração**: Os *worktrees* filhos herdam automaticamente as definições do pai.
-- **Limpeza Segura**: Os ficheiros modificados são preservados durante o *unsync*.
-- **Otimizado para Agentes de IA**: Crie um *worktree* e configure o ambiente com um único comando.
+- **Montagem de volumes**: Suporte para links simbólicos ou cópia de arquivos
+- **Herança de configuração**: Árvores de trabalho filhas herdam automaticamente a configuração pai
+- **Limpeza segura**: Arquivos modificados pelo usuário não são excluídos
+- **Otimizado para agentes IA**: Criar árvore de trabalho + configurar ambiente com um único comando
 
 ## 📦 Instalação
 
@@ -31,7 +31,7 @@ scoop install git-volume
 go install github.com/laggu/git-volume@latest
 ```
 
-## 🚀 Início Rápido
+## 🚀 Início rápido
 
 **1. Inicializar**
 ```bash
@@ -46,66 +46,115 @@ volumes:
     mode: "copy"
 ```
 
-**3. Montar Volumes**
+**3. Montar volumes**
 ```bash
 git volume sync
 ```
 
-**4. Verificar Estado**
+**4. Verificar status**
 ```bash
 git volume status
 ```
 
 ## 📖 Comandos
 
-| Comando             | Descrição                                                         |
-| ------------------- | ----------------------------------------------------------------- |
-| `git volume init`   | Cria o diretório global e um ficheiro de configuração de exemplo. |
-| `git volume sync`   | Monta volumes no worktree atual com base na configuração.         |
-| `git volume unsync` | Remove volumes montados (ficheiros modificados são preservados).  |
-| `git volume status` | Exibe o estado atual dos volumes.                                 |
+| Comando                    | Descrição                                                        |
+| -------------------------- | ---------------------------------------------------------------- |
+| `git volume init`          | Criar diretório global e arquivo de configuração exemplo         |
+| `git volume sync`          | Montar volumes na árvore de trabalho atual                       |
+| `git volume unsync`        | Remover volumes montados (arquivos modificados são preservados)  |
+| `git volume status`        | Exibir o status atual dos volumes                                |
+| `git volume global add`    | Copiar arquivos para o armazenamento global (`~/.git-volume`)    |
+| `git volume global list`   | Listar arquivos no armazenamento global (visualização em árvore) |
+| `git volume global edit`   | Editar um arquivo do armazenamento global com `$EDITOR`          |
+| `git volume global remove` | Remover arquivos do armazenamento global (alias: `rm`)           |
+| `git volume version`       | Exibir informações de versão                                     |
 
-## ⚙️ Ficheiro de Configuração (`git-volume.yaml`)
+## ⚙️ Arquivo de configuração (`git-volume.yaml`)
 
 ```yaml
 volumes:
-  # Formato simples (predefinido: ligação simbólica)
+  # Formato simples (padrão: link simbólico)
   - ".env.shared:.env"
 
   # Com opções
   - mount: "secrets/prod.key:config/prod.key"
-    mode: "copy"   # link (predefinido) ou copy
+    mode: "copy"   # link (padrão) ou copy
 
+  # Montar do armazenamento global (~/.git-volume)
+  - "@global/secrets/prod.key:config/key"
+
+  # Montagem de diretórios (copia o diretório inteiro)
+  - mount: "configs:app/configs"
+    mode: "copy"
 ```
 
-### Comparação de Modos
+### Comparação de modos
 
-| Modo   | Descrição              | Caso de Uso                                                        |
-| ------ | ---------------------- | ------------------------------------------------------------------ |
-| `link` | Cria ligação simbólica | Desenvolvimento local (as alterações refletem-se imediatamente).   |
-| `copy` | Copia ficheiro         | Builds de Docker (ambientes sem suporte para ligações simbólicas). |
+| Modo   | Descrição            | Caso de uso                                               |
+| ------ | -------------------- | --------------------------------------------------------- |
+| `link` | Criar link simbólico | Desenvolvimento local (alterações refletem imediatamente) |
+| `copy` | Copiar arquivo       | Builds Docker (ambientes sem suporte a links simbólicos)  |
 
-## 🔄 Herança de Worktree
+## 🔄 Herança de árvores de trabalho
 
-Se um *worktree* filho não tiver `git-volume.yaml`, ele utiliza automaticamente a configuração do *worktree* pai (principal).
+Se uma árvore de trabalho filha não tiver `git-volume.yaml`, a configuração da árvore de trabalho pai (principal) é usada automaticamente.
 
 ```bash
-# A configuração existe apenas no worktree principal
+# Configuração existe apenas na árvore de trabalho principal
 main-repo/
-├── .git/             # diretório comum do git
-├── git-volume.yaml   # ficheiro de configuração
-├── .env.shared       # ficheiro de origem
+├── .git/             # git common dir
+├── git-volume.yaml   # arquivo de configuração
+├── .env.shared       # arquivo fonte
 └── ...
 
-# Executar sync num worktree filho usa a configuração do pai
+# Ao executar sync na árvore de trabalho filha, usa a config do pai
 cd ../feature-branch
 git volume sync  # usa o git-volume.yaml do pai
 ```
 
-## 🛡️ Funcionalidades de Segurança
+## 🌐 Armazenamento global
 
-- **Deteção de Alterações no Unsync**: Ficheiros copiados em modo *copy* são preservados se modificados.
-- **Idempotente**: Executar `sync` várias vezes é seguro.
+O armazenamento global (`~/.git-volume`) permite compartilhar arquivos entre múltiplos projetos usando o prefixo `@global/`.
+
+```bash
+# Adicionar arquivos ao armazenamento global
+git volume global add .env
+git volume global add .env.local --as .env
+git volume global add .env config.json --path myproject
+
+# Listar, editar e remover
+git volume global list
+git volume global edit config.json
+git volume global remove old-secret.key
+```
+
+Use `@global/` em sua configuração para referenciar esses arquivos:
+
+```yaml
+volumes:
+  - "@global/.env:.env"
+  - mount: "@global/secrets/prod.key:config/key"
+    mode: "copy"
+```
+
+## 🔧 Opções CLI
+
+| Flag              | Comandos         | Descrição                                            |
+| ----------------- | ---------------- | ---------------------------------------------------- |
+| `--dry-run`       | `sync`, `unsync` | Mostrar o que seria feito sem realizar alterações    |
+| `--relative`      | `sync`           | Criar links simbólicos relativos em vez de absolutos |
+| `--verbose`, `-v` | Todos            | Saída detalhada                                      |
+| `--quiet`, `-q`   | Todos            | Ocultar saída não relacionada a erros                |
+| `--config`, `-c`  | Todos            | Caminho personalizado do arquivo de configuração     |
+
+## 🛡️ Recursos de segurança
+
+- **Rejeição de fontes simbólicas**: `sync` e `global add` rejeitam fontes que são links simbólicos por segurança
+- **Prevenção de travessia de caminho**: Todos os caminhos são validados para prevenir ataques de escape de diretório
+- **Detecção de alterações no Unsync**: Arquivos e diretórios copiados são preservados se modificados
+- **Detecção de alterações no Status**: Arquivos copiados diferentes do original são exibidos como `MODIFIED`
+- **Sync idempotente**: Executar `sync` múltiplas vezes sempre produz o mesmo resultado
 
 ## 📄 Licença
 
