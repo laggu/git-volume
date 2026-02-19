@@ -351,3 +351,32 @@ func TestGitVolume_Unsync_CopyDirectory_MissingSource(t *testing.T) {
 	_, err := os.Stat(filepath.Join(targetDir, "config"))
 	assert.NoError(t, err, "Config directory should NOT be removed if source is missing")
 }
+
+func TestGitVolume_Unsync_TypeMismatch(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// 1. Setup Source as Directory
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(configDir, 0755))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	// Manually create Target as File (simulating a change or weird state)
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, "config"), []byte("I am a file"), 0644))
+
+	// Unsync
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	// Verify Target File Preserved (Safety check should fail due to type mismatch)
+	// checkRemovable sees source is Dir, target is File -> mismatch -> returns false
+	info, err := os.Stat(filepath.Join(targetDir, "config"))
+	require.NoError(t, err)
+	assert.True(t, !info.IsDir())
+
+	data, _ := os.ReadFile(filepath.Join(targetDir, "config"))
+	assert.Equal(t, "I am a file", string(data))
+}

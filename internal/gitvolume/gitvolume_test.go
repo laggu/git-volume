@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,4 +67,33 @@ func createTestGitVolume(sourceDir, targetDir, globalDir string, volumes []Volum
 		verbose: false,
 		quiet:   true,
 	}
+}
+
+func TestGitVolumeAccessors(t *testing.T) {
+	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link1.txt", Mode: ModeLink},
+		{Source: "global.txt", Target: "global.txt", Mode: ModeLink, IsGlobal: true},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, globalDir, volumes)
+
+	assert.Equal(t, sourceDir, gv.SourceDir())
+	assert.Equal(t, targetDir, gv.TargetDir())
+	assert.Equal(t, globalDir, gv.GlobalDir())
+	assert.NotNil(t, gv.Context())
+	assert.True(t, gv.HasGlobalVolumes())
+}
+
+func TestValidatePath_GitDirectory(t *testing.T) {
+	err := validatePath(".git")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), ".git")
+
+	err = validatePath(".git/config")
+	assert.Error(t, err)
+
+	err = validatePath(".")
+	assert.Error(t, err)
 }

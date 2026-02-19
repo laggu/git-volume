@@ -321,6 +321,25 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	assert.Error(t, ctx.Load("", true))
 }
 
+func TestNewWorkspace_EmptyConfig(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	configPath := filepath.Join(repoDir, ConfigFileName)
+	require.NoError(t, os.WriteFile(configPath, []byte(""), 0644))
+
+	// Change to repo dir
+	oldDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
+
+	ctx, err := NewContext()
+	require.NoError(t, err)
+	// Should not error, just empty volumes
+	require.NoError(t, ctx.Load("", true))
+	assert.Equal(t, 0, len(ctx.Volumes))
+}
+
 func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
 	repoDir, cleanup := setupTestGitRepo(t)
 	defer cleanup()
@@ -391,4 +410,100 @@ func TestHasGlobalVolumes(t *testing.T) {
 			assert.Equal(t, tt.want, ctx.HasGlobalVolumes())
 		})
 	}
+}
+
+func TestCheckStatus(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	t.Run("Link OK", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "link.txt", Mode: ModeLink}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "link.txt")
+		require.NoError(t, os.Symlink(vol.SourcePath, vol.TargetPath))
+		defer os.Remove(vol.TargetPath)
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusOKLinked, status.Status)
+	})
+
+	t.Run("Link WrongLink", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "wrong_link.txt", Mode: ModeLink}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "wrong_link.txt")
+		require.NoError(t, os.Symlink(filepath.Join(sourceDir, "source2.txt"), vol.TargetPath))
+		defer os.Remove(vol.TargetPath)
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusWrongLink, status.Status)
+	})
+
+	t.Run("Link ExistsNotLink", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "notlink.txt", Mode: ModeLink}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "notlink.txt")
+		require.NoError(t, os.WriteFile(vol.TargetPath, []byte("file"), 0644))
+		defer os.Remove(vol.TargetPath)
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusExistsNotLink, status.Status)
+	})
+
+	t.Run("Copy OK", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "copy_ok.txt", Mode: ModeCopy}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "copy_ok.txt")
+		require.NoError(t, copyFile(vol.SourcePath, vol.TargetPath))
+		defer os.Remove(vol.TargetPath)
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusOKCopied, status.Status)
+	})
+
+	t.Run("Copy Modified", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "copy_mod.txt", Mode: ModeCopy}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "copy_mod.txt")
+		require.NoError(t, os.WriteFile(vol.TargetPath, []byte("modified"), 0644))
+		defer os.Remove(vol.TargetPath)
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusModified, status.Status)
+	})
+
+	t.Run("MissingSource", func(t *testing.T) {
+		vol := Volume{Source: "missing.txt", Target: "x.txt", Mode: ModeLink}
+		vol.SourcePath = filepath.Join(sourceDir, "missing.txt")
+		vol.TargetPath = filepath.Join(targetDir, "x.txt")
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusMissingSource, status.Status)
+	})
+
+	t.Run("NotMounted", func(t *testing.T) {
+		vol := Volume{Source: "source1.txt", Target: "nomount.txt", Mode: ModeLink}
+		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
+		vol.TargetPath = filepath.Join(targetDir, "nomount.txt")
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusNotMounted, status.Status)
+	})
+
+	t.Run("Copy Dir OK", func(t *testing.T) {
+		configDir := filepath.Join(sourceDir, "statusdir")
+		require.NoError(t, os.Mkdir(configDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(configDir, "f.txt"), []byte("data"), 0644))
+		vol := Volume{Source: "statusdir", Target: "statusdir", Mode: ModeCopy}
+		vol.SourcePath = configDir
+		vol.TargetPath = filepath.Join(targetDir, "statusdir")
+		require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusOKCopied, status.Status)
+	})
+
+	t.Run("Copy Dir Modified", func(t *testing.T) {
+		configDir := filepath.Join(sourceDir, "statusdir2")
+		require.NoError(t, os.Mkdir(configDir, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(configDir, "f.txt"), []byte("data"), 0644))
+		vol := Volume{Source: "statusdir2", Target: "statusdir2", Mode: ModeCopy}
+		vol.SourcePath = configDir
+		vol.TargetPath = filepath.Join(targetDir, "statusdir2")
+		require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+		require.NoError(t, os.WriteFile(filepath.Join(vol.TargetPath, "f.txt"), []byte("changed"), 0644))
+		status := vol.CheckStatus()
+		assert.Equal(t, StatusModified, status.Status)
+	})
 }
