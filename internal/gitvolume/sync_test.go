@@ -334,3 +334,101 @@ func TestGitVolume_Sync_GlobalSource_EmptyGlobalBase(t *testing.T) {
 	assert.Error(t, err, "expected error when GlobalDir is empty")
 	assert.Contains(t, err.Error(), "global directory not configured")
 }
+
+func TestGitVolume_Sync_SourceIsSymlink(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// Create symlink source
+	// We need absolute path for symlink source to be valid in most OSs or relative
+	targetFile := filepath.Join(sourceDir, "target.txt")
+	require.NoError(t, os.WriteFile(targetFile, []byte("target"), 0644))
+
+	symlinkSource := filepath.Join(sourceDir, "symlink-source")
+	require.NoError(t, os.Symlink(targetFile, symlinkSource))
+
+	volumes := []Volume{
+		{Source: "symlink-source", Target: "dest.txt", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	err := gv.Sync(SyncOptions{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "source file is a symlink")
+}
+
+func TestGitVolume_Sync_PathTraversal(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	// 1. Source traversal
+	volumes := []Volume{
+		{Source: "../outside.txt", Target: "dest.txt", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+	err := gv.Sync(SyncOptions{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "security error for source")
+
+	// 2. Target traversal
+	volumes = []Volume{
+		{Source: "source1.txt", Target: "../outside.txt", Mode: ModeCopy},
+	}
+	gv = createTestGitVolume(sourceDir, targetDir, "", volumes)
+	err = gv.Sync(SyncOptions{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "security error for target")
+}
+
+func TestGitVolume_Sync_Verbose(t *testing.T) {
+	sourceDir, targetDir, globalDir, cleanup := setupTestEnvWithGlobal(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "link.txt", Mode: ModeLink},
+		{Source: "source2.txt", Target: "copy.txt", Mode: ModeCopy},
+		{Source: "global.txt", Target: "global.txt", Mode: ModeLink, IsGlobal: true},
+	}
+	ctx := &Context{
+		SourceDir: sourceDir,
+		TargetDir: targetDir,
+		GlobalDir: globalDir,
+		Volumes:   volumes,
+	}
+	ctx.ResolveVolumePaths()
+
+	gv := &GitVolume{ctx: ctx, verbose: true, quiet: false}
+
+	// Sync with verbose output
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	// Verify all files created
+	_, err := os.Lstat(filepath.Join(targetDir, "link.txt"))
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(targetDir, "copy.txt"))
+	assert.NoError(t, err)
+
+	// Sync with relative links and verbose
+	require.NoError(t, gv.Sync(SyncOptions{RelativeLinks: true}))
+}
+
+func TestGitVolume_Sync_NonQuiet_Error(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "nonexistent.txt", Target: "dest.txt", Mode: ModeLink},
+	}
+	ctx := &Context{
+		SourceDir: sourceDir,
+		TargetDir: targetDir,
+		Volumes:   volumes,
+	}
+	ctx.ResolveVolumePaths()
+
+	gv := &GitVolume{ctx: ctx, verbose: false, quiet: false}
+
+	// Should report error non-quietly
+	err := gv.Sync(SyncOptions{})
+	assert.Error(t, err)
+}

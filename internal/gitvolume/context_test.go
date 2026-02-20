@@ -321,6 +321,26 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	assert.Error(t, ctx.Load("", true))
 }
 
+func TestNewWorkspace_EmptyConfig(t *testing.T) {
+	repoDir, cleanup := setupTestGitRepo(t)
+	defer cleanup()
+
+	configPath := filepath.Join(repoDir, ConfigFileName)
+	require.NoError(t, os.WriteFile(configPath, []byte(""), 0644))
+
+	// Change to repo dir
+	oldDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(oldDir) }()
+	require.NoError(t, os.Chdir(repoDir))
+
+	ctx, err := NewContext()
+	require.NoError(t, err)
+	// Should not error, just empty volumes
+	require.NoError(t, ctx.Load("", true))
+	assert.Equal(t, 0, len(ctx.Volumes))
+}
+
 func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
 	repoDir, cleanup := setupTestGitRepo(t)
 	defer cleanup()
@@ -389,6 +409,112 @@ func TestHasGlobalVolumes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &Context{Volumes: tt.volumes}
 			assert.Equal(t, tt.want, ctx.HasGlobalVolumes())
+		})
+	}
+}
+
+func TestCheckStatus(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	createVol := func(source, target, mode string) Volume {
+		return Volume{
+			Source:     source,
+			Target:     target,
+			Mode:       mode,
+			SourcePath: filepath.Join(sourceDir, source),
+			TargetPath: filepath.Join(targetDir, target),
+		}
+	}
+
+	testCases := []struct {
+		name       string
+		vol        Volume
+		setup      func(t *testing.T, vol Volume)
+		wantStatus string
+	}{
+		{
+			name: "Link OK",
+			vol:  createVol("source1.txt", "link.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Symlink(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKLinked,
+		},
+		{
+			name: "Link WrongLink",
+			vol:  createVol("source1.txt", "wrong_link.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Symlink(filepath.Join(sourceDir, "source2.txt"), vol.TargetPath))
+			},
+			wantStatus: StatusWrongLink,
+		},
+		{
+			name: "Link ExistsNotLink",
+			vol:  createVol("source1.txt", "notlink.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.WriteFile(vol.TargetPath, []byte("file"), 0644))
+			},
+			wantStatus: StatusExistsNotLink,
+		},
+		{
+			name: "Copy OK",
+			vol:  createVol("source1.txt", "copy_ok.txt", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, copyFile(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKCopied,
+		},
+		{
+			name: "Copy Modified",
+			vol:  createVol("source1.txt", "copy_mod.txt", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.WriteFile(vol.TargetPath, []byte("modified"), 0644))
+			},
+			wantStatus: StatusModified,
+		},
+		{
+			name:       "MissingSource",
+			vol:        createVol("missing.txt", "x.txt", ModeLink),
+			setup:      func(t *testing.T, vol Volume) {},
+			wantStatus: StatusMissingSource,
+		},
+		{
+			name:       "NotMounted",
+			vol:        createVol("source1.txt", "nomount.txt", ModeLink),
+			setup:      func(t *testing.T, vol Volume) {},
+			wantStatus: StatusNotMounted,
+		},
+		{
+			name: "Copy Dir OK",
+			vol:  createVol("statusdir", "statusdir_ok", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Mkdir(vol.SourcePath, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "f.txt"), []byte("data"), 0644))
+				require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKCopied,
+		},
+		{
+			name: "Copy Dir Modified",
+			vol:  createVol("statusdir2", "statusdir_mod", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Mkdir(vol.SourcePath, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "f.txt"), []byte("data"), 0644))
+				require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.TargetPath, "f.txt"), []byte("changed"), 0644))
+			},
+			wantStatus: StatusModified,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(t, tc.vol)
+			defer os.RemoveAll(tc.vol.TargetPath)
+
+			status := tc.vol.CheckStatus()
+			assert.Equal(t, tc.wantStatus, status.Status)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package gitvolume
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,4 +71,25 @@ func TestGitVolume_status_CopyDirectoryModified(t *testing.T) {
 	statuses, err = gv.status()
 	require.NoError(t, err)
 	assert.Equal(t, StatusModified, statuses[0].Status)
+}
+
+func TestAfterAllStatus(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "local.txt", Mode: ModeLink},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	// Test afterAllStatus with nil error
+	statuses := []VolumeStatus{
+		{Source: "source1.txt", Target: "local.txt", Mode: ModeLink, Status: StatusNotMounted},
+	}
+	err := gv.afterAllStatus(statuses, nil)
+	assert.NoError(t, err)
+
+	// Test afterAllStatus with error
+	err = gv.afterAllStatus(nil, fmt.Errorf("test error"))
+	assert.Error(t, err)
 }

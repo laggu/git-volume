@@ -87,3 +87,65 @@ func TestSortTree(t *testing.T) {
 	sortTree(root)
 	verifyOrder()
 }
+
+func TestGlobalList(t *testing.T) {
+	globalDir, cleanup := setupGlobalTestEnv(t)
+	defer cleanup()
+
+	require.NoError(t, os.MkdirAll(globalDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "file1.txt"), []byte("a"), 0644))
+
+	gv := createTestGitVolumeWithGlobal(globalDir)
+	err := gv.GlobalList()
+	require.NoError(t, err)
+}
+
+func TestGlobalList_Empty(t *testing.T) {
+	globalDir, cleanup := setupGlobalTestEnv(t)
+	defer cleanup()
+
+	require.NoError(t, os.MkdirAll(globalDir, 0755))
+
+	gv := createTestGitVolumeWithGlobal(globalDir)
+	err := gv.GlobalList()
+	require.NoError(t, err)
+}
+
+func TestGlobalList_NotInitialized(t *testing.T) {
+	tmpDir := t.TempDir()
+	globalDir := filepath.Join(tmpDir, "nonexistent")
+
+	gv := createTestGitVolumeWithGlobal(globalDir)
+	err := gv.GlobalList()
+	require.NoError(t, err)
+}
+
+func TestGlobalList_NestedDirs(t *testing.T) {
+	globalDir, cleanup := setupGlobalTestEnv(t)
+	defer cleanup()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(globalDir, "dir1", "subdir"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "file1.txt"), []byte("a"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "dir1", "file2.txt"), []byte("b"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(globalDir, "dir1", "subdir", "file3.txt"), []byte("c"), 0644))
+
+	gv := createTestGitVolumeWithGlobal(globalDir)
+	err := gv.GlobalList()
+	require.NoError(t, err)
+}
+
+func TestPrintNode(t *testing.T) {
+	// Test printNode directly for both isLast=true and isLast=false
+	node := &treeNode{
+		name:  "parent",
+		isDir: true,
+		children: []*treeNode{
+			{name: "child1.txt", isDir: false},
+			{name: "child2.txt", isDir: false},
+		},
+	}
+	// Should not panic
+	printNode(node, "", true)
+	printNode(node, "", false)
+	printNode(node, "│   ", true)
+}
