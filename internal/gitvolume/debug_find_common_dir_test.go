@@ -116,7 +116,10 @@ func TestDebugFindCommonDir(t *testing.T) {
 
 		// DEBUGGING: Check what git rev-parse --git-common-dir returns here
 		cmd = exec.Command("git", "-C", wtDir, "rev-parse", "--git-common-dir")
-		out, _ := cmd.Output()
+		out, err := cmd.Output()
+		if err != nil {
+			t.Logf("git rev-parse --git-common-dir failed: %v", err)
+		}
 		gitCommonDir := strings.TrimSpace(string(out))
 		t.Logf("git rev-parse --git-common-dir in worktree: %s", gitCommonDir)
 

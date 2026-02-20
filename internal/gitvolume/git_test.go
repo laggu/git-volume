@@ -25,14 +25,17 @@ func TestFindWorktreeRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	// Evaluate symlinks in case /var vs /private/var on Mac
-	evalTmpDir, _ := filepath.EvalSymlinks(tmpDir)
-	evalRoot, _ := filepath.EvalSymlinks(root)
+	evalTmpDir, err := filepath.EvalSymlinks(tmpDir)
+	require.NoError(t, err)
+	evalRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
 	assert.Equal(t, evalTmpDir, evalRoot)
 
 	// Find root from subdir
 	root, err = FindWorktreeRoot(subDir)
 	require.NoError(t, err)
-	evalRoot, _ = filepath.EvalSymlinks(root)
+	evalRoot, err = filepath.EvalSymlinks(root)
+	require.NoError(t, err)
 	assert.Equal(t, evalTmpDir, evalRoot)
 
 	// 2. Not a git repo
@@ -53,8 +56,10 @@ func TestFindCommonDir(t *testing.T) {
 	commonDir, err := findCommonDir(repoDir)
 	require.NoError(t, err)
 
-	evalRepoDir, _ := filepath.EvalSymlinks(repoDir)
-	evalCommonDir, _ := filepath.EvalSymlinks(commonDir)
+	evalRepoDir, err := filepath.EvalSymlinks(repoDir)
+	require.NoError(t, err)
+	evalCommonDir, err := filepath.EvalSymlinks(commonDir)
+	require.NoError(t, err)
 	assert.Equal(t, evalRepoDir, evalCommonDir)
 
 	// 2. Worktree (standard layout) is harder to set up without bare repo or commits

@@ -329,7 +329,8 @@ func TestNewWorkspace_EmptyConfig(t *testing.T) {
 	require.NoError(t, os.WriteFile(configPath, []byte(""), 0644))
 
 	// Change to repo dir
-	oldDir, _ := os.Getwd()
+	oldDir, err := os.Getwd()
+	require.NoError(t, err)
 	defer func() { _ = os.Chdir(oldDir) }()
 	require.NoError(t, os.Chdir(repoDir))
 
