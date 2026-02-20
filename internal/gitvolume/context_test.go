@@ -417,94 +417,104 @@ func TestCheckStatus(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	t.Run("Link OK", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "link.txt", Mode: ModeLink}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "link.txt")
-		require.NoError(t, os.Symlink(vol.SourcePath, vol.TargetPath))
-		defer os.Remove(vol.TargetPath)
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusOKLinked, status.Status)
-	})
+	createVol := func(source, target, mode string) Volume {
+		return Volume{
+			Source:     source,
+			Target:     target,
+			Mode:       mode,
+			SourcePath: filepath.Join(sourceDir, source),
+			TargetPath: filepath.Join(targetDir, target),
+		}
+	}
 
-	t.Run("Link WrongLink", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "wrong_link.txt", Mode: ModeLink}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "wrong_link.txt")
-		require.NoError(t, os.Symlink(filepath.Join(sourceDir, "source2.txt"), vol.TargetPath))
-		defer os.Remove(vol.TargetPath)
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusWrongLink, status.Status)
-	})
+	testCases := []struct {
+		name       string
+		vol        Volume
+		setup      func(t *testing.T, vol Volume)
+		wantStatus string
+	}{
+		{
+			name: "Link OK",
+			vol:  createVol("source1.txt", "link.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Symlink(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKLinked,
+		},
+		{
+			name: "Link WrongLink",
+			vol:  createVol("source1.txt", "wrong_link.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Symlink(filepath.Join(sourceDir, "source2.txt"), vol.TargetPath))
+			},
+			wantStatus: StatusWrongLink,
+		},
+		{
+			name: "Link ExistsNotLink",
+			vol:  createVol("source1.txt", "notlink.txt", ModeLink),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.WriteFile(vol.TargetPath, []byte("file"), 0644))
+			},
+			wantStatus: StatusExistsNotLink,
+		},
+		{
+			name: "Copy OK",
+			vol:  createVol("source1.txt", "copy_ok.txt", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, copyFile(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKCopied,
+		},
+		{
+			name: "Copy Modified",
+			vol:  createVol("source1.txt", "copy_mod.txt", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.WriteFile(vol.TargetPath, []byte("modified"), 0644))
+			},
+			wantStatus: StatusModified,
+		},
+		{
+			name:       "MissingSource",
+			vol:        createVol("missing.txt", "x.txt", ModeLink),
+			setup:      func(t *testing.T, vol Volume) {},
+			wantStatus: StatusMissingSource,
+		},
+		{
+			name:       "NotMounted",
+			vol:        createVol("source1.txt", "nomount.txt", ModeLink),
+			setup:      func(t *testing.T, vol Volume) {},
+			wantStatus: StatusNotMounted,
+		},
+		{
+			name: "Copy Dir OK",
+			vol:  createVol("statusdir", "statusdir_ok", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Mkdir(vol.SourcePath, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "f.txt"), []byte("data"), 0644))
+				require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKCopied,
+		},
+		{
+			name: "Copy Dir Modified",
+			vol:  createVol("statusdir2", "statusdir_mod", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.Mkdir(vol.SourcePath, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "f.txt"), []byte("data"), 0644))
+				require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.TargetPath, "f.txt"), []byte("changed"), 0644))
+			},
+			wantStatus: StatusModified,
+		},
+	}
 
-	t.Run("Link ExistsNotLink", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "notlink.txt", Mode: ModeLink}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "notlink.txt")
-		require.NoError(t, os.WriteFile(vol.TargetPath, []byte("file"), 0644))
-		defer os.Remove(vol.TargetPath)
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusExistsNotLink, status.Status)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(t, tc.vol)
+			defer os.RemoveAll(tc.vol.TargetPath)
 
-	t.Run("Copy OK", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "copy_ok.txt", Mode: ModeCopy}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "copy_ok.txt")
-		require.NoError(t, copyFile(vol.SourcePath, vol.TargetPath))
-		defer os.Remove(vol.TargetPath)
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusOKCopied, status.Status)
-	})
-
-	t.Run("Copy Modified", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "copy_mod.txt", Mode: ModeCopy}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "copy_mod.txt")
-		require.NoError(t, os.WriteFile(vol.TargetPath, []byte("modified"), 0644))
-		defer os.Remove(vol.TargetPath)
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusModified, status.Status)
-	})
-
-	t.Run("MissingSource", func(t *testing.T) {
-		vol := Volume{Source: "missing.txt", Target: "x.txt", Mode: ModeLink}
-		vol.SourcePath = filepath.Join(sourceDir, "missing.txt")
-		vol.TargetPath = filepath.Join(targetDir, "x.txt")
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusMissingSource, status.Status)
-	})
-
-	t.Run("NotMounted", func(t *testing.T) {
-		vol := Volume{Source: "source1.txt", Target: "nomount.txt", Mode: ModeLink}
-		vol.SourcePath = filepath.Join(sourceDir, "source1.txt")
-		vol.TargetPath = filepath.Join(targetDir, "nomount.txt")
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusNotMounted, status.Status)
-	})
-
-	t.Run("Copy Dir OK", func(t *testing.T) {
-		configDir := filepath.Join(sourceDir, "statusdir")
-		require.NoError(t, os.Mkdir(configDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(configDir, "f.txt"), []byte("data"), 0644))
-		vol := Volume{Source: "statusdir", Target: "statusdir", Mode: ModeCopy}
-		vol.SourcePath = configDir
-		vol.TargetPath = filepath.Join(targetDir, "statusdir")
-		require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusOKCopied, status.Status)
-	})
-
-	t.Run("Copy Dir Modified", func(t *testing.T) {
-		configDir := filepath.Join(sourceDir, "statusdir2")
-		require.NoError(t, os.Mkdir(configDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(configDir, "f.txt"), []byte("data"), 0644))
-		vol := Volume{Source: "statusdir2", Target: "statusdir2", Mode: ModeCopy}
-		vol.SourcePath = configDir
-		vol.TargetPath = filepath.Join(targetDir, "statusdir2")
-		require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
-		require.NoError(t, os.WriteFile(filepath.Join(vol.TargetPath, "f.txt"), []byte("changed"), 0644))
-		status := vol.CheckStatus()
-		assert.Equal(t, StatusModified, status.Status)
-	})
+			status := tc.vol.CheckStatus()
+			assert.Equal(t, tc.wantStatus, status.Status)
+		})
+	}
 }
