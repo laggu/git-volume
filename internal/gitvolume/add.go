@@ -67,8 +67,8 @@ func (g *GitVolume) beforeAllAdd(files []string, opts AddOptions) error {
 }
 
 func (g *GitVolume) afterAllAdd(errs []error) error {
-	if len(errs) > 0 && !g.quiet {
-		fmt.Printf("❌ Global add completed with %d error(s)\n", len(errs))
+	if len(errs) > 0 && g.isNormalOrHigher() {
+		fmt.Fprintf(os.Stderr, "❌ Global add completed with %d error(s)\n", len(errs))
 	}
 	return errors.Join(errs...)
 }
@@ -151,14 +151,14 @@ func (g *GitVolume) add(file string, prepared addPrepared, opts AddOptions) erro
 
 func (g *GitVolume) afterAdd(file, dstPath string, opts AddOptions, err error, errs *[]error) {
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to add %s: %v\n", file, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Failed to add %s: %v\n", file, err)
 		}
 		*errs = append(*errs, err)
 		return
 	}
 
-	if !g.quiet {
+	if g.isDetailed() {
 		relPath, err := filepath.Rel(g.ctx.GlobalDir, dstPath)
 		if err != nil {
 			// This should not happen due to prior validation, but as a fallback:

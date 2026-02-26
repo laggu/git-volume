@@ -33,8 +33,8 @@ func (g *GitVolume) beforeAllRemove() error {
 }
 
 func (g *GitVolume) afterAllRemove(errs []error) error {
-	if len(errs) > 0 && !g.quiet {
-		fmt.Printf("❌ Global remove completed with %d error(s)\n", len(errs))
+	if len(errs) > 0 && g.isNormalOrHigher() {
+		fmt.Fprintf(os.Stderr, "❌ Global remove completed with %d error(s)\n", len(errs))
 	}
 	return errors.Join(errs...)
 }
@@ -74,14 +74,14 @@ func (g *GitVolume) remove(file string) error {
 
 func (g *GitVolume) afterRemove(file string, err error, errs *[]error) {
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to remove %s: %v\n", file, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Failed to remove %s: %v\n", file, err)
 		}
 		*errs = append(*errs, err)
 		return
 	}
 
-	if !g.quiet {
+	if g.isDetailed() {
 		fmt.Printf("✓ Removed %s\n", file)
 	}
 }

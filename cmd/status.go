@@ -14,10 +14,7 @@ var statusCmd = &cobra.Command{
 	Short:        "Show the status of all volumes",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gv, err := gitvolume.New(gitvolume.Options{
-			ConfigPath: cfgFile,
-			Quiet:      quiet,
-		})
+		gv, err := gitvolume.New(commandOptions(true))
 		if err != nil {
 			return err
 		}

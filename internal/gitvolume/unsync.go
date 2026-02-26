@@ -38,7 +38,7 @@ func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
 		}
 	}
 
-	if !g.quiet {
+	if g.isNormalOrHigher() {
 		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
 	}
 
@@ -46,10 +46,10 @@ func (g *GitVolume) beforeAllUnsync(opts UnsyncOptions) error {
 }
 
 func (g *GitVolume) afterAllUnsync(errs []error, opts UnsyncOptions) error {
-	if len(errs) > 0 && !g.quiet {
-		fmt.Printf("❌ Unsync completed with %d error(s)\n", len(errs))
+	if len(errs) > 0 && g.isNormalOrHigher() {
+		fmt.Fprintf(os.Stderr, "❌ Unsync completed with %d error(s)\n", len(errs))
 	}
-	if len(errs) == 0 && !g.quiet && !opts.DryRun {
+	if len(errs) == 0 && g.isNormalOrHigher() && !opts.DryRun {
 		fmt.Println("✓ Unsync complete")
 	}
 	return errors.Join(errs...)
@@ -70,21 +70,23 @@ func (g *GitVolume) beforeUnsync(vol Volume) error {
 func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 	removable, err := g.checkRemovable(vol)
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("⚠️  Skipping %s: %v\n", vol.Target, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "⚠️  Skipping %s: %v\n", vol.Target, err)
 		}
 		return nil
 	}
 
 	if !removable {
-		if !g.quiet {
-			fmt.Printf("⚠️  Skipping %s: modified or not managed by us\n", vol.Target)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "⚠️  Skipping %s: modified or not managed by us\n", vol.Target)
 		}
 		return nil
 	}
 
 	if opts.DryRun {
-		fmt.Printf("[dry-run] Would remove %s\n", vol.Target)
+		if g.isNormalOrHigher() {
+			fmt.Printf("[dry-run] Would remove %s\n", vol.Target)
+		}
 		return nil
 	}
 
@@ -93,8 +95,8 @@ func (g *GitVolume) unsync(vol Volume, opts UnsyncOptions) error {
 
 func (g *GitVolume) afterUnsync(vol Volume, opts UnsyncOptions, err error, errs *[]error) {
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to unsync %s: %v\n", vol.Target, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Failed to unsync %s: %v\n", vol.Target, err)
 		}
 		*errs = append(*errs, err)
 	}
@@ -166,7 +168,7 @@ func (g *GitVolume) removeVolume(vol Volume) error {
 		}
 	}
 
-	if !g.quiet {
+	if g.isDetailed() {
 		fmt.Printf("✓ Removed %s\n", vol.Target)
 	}
 

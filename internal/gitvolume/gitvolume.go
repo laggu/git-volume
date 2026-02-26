@@ -3,16 +3,30 @@ package gitvolume
 // GitVolume is the main entry point for git-volume operations
 type GitVolume struct {
 	ctx        *Context
-	verbose    bool
-	quiet      bool
+	verbosity  int
 	configPath string // stored for Load()
 }
 
 // Options configures GitVolume creation
 type Options struct {
 	ConfigPath string // Custom config file path (optional)
-	Verbose    bool   // Verbose output
-	Quiet      bool   // Suppress non-error output
+	Verbosity  int
+}
+
+const (
+	VerbosityQuiet    = 0
+	VerbosityNormal   = 1
+	VerbosityDetailed = 2
+)
+
+func normalizeVerbosity(level int) int {
+	if level < VerbosityQuiet {
+		return VerbosityQuiet
+	}
+	if level > VerbosityDetailed {
+		return VerbosityDetailed
+	}
+	return level
 }
 
 // New creates a new GitVolume instance without loading config
@@ -23,8 +37,7 @@ func New(opts Options) (*GitVolume, error) {
 	}
 	return &GitVolume{
 		ctx:        ctx,
-		verbose:    opts.Verbose,
-		quiet:      opts.Quiet,
+		verbosity:  normalizeVerbosity(opts.Verbosity),
 		configPath: opts.ConfigPath,
 	}, nil
 }
@@ -32,8 +45,12 @@ func New(opts Options) (*GitVolume, error) {
 // Load loads configuration from the config file.
 // Must be called before Sync, Unsync, or Status operations.
 func (g *GitVolume) Load() error {
-	return g.ctx.Load(g.configPath, g.quiet)
+	return g.ctx.Load(g.configPath, g.verbosity)
 }
+
+func (g *GitVolume) isErrorsOnly() bool     { return g.verbosity <= VerbosityQuiet }
+func (g *GitVolume) isNormalOrHigher() bool { return g.verbosity >= VerbosityNormal }
+func (g *GitVolume) isDetailed() bool       { return g.verbosity >= VerbosityDetailed }
 
 // Context returns the underlying context
 func (g *GitVolume) Context() *Context { return g.ctx }

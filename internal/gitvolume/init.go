@@ -56,13 +56,13 @@ func (g *GitVolume) init(state *initState) error {
 
 func (g *GitVolume) afterInit(state *initState, err error) error {
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Init failed: %v\n", err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Init failed: %v\n", err)
 		}
 		return err
 	}
 
-	if g.quiet {
+	if !g.isNormalOrHigher() {
 		return nil
 	}
 

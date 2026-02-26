@@ -144,8 +144,7 @@ volumes:
 | ----------------- | ---------------- | ---------------------------------------------- |
 | `--dry-run`       | `sync`, `unsync` | Show what would be done without making changes |
 | `--relative`      | `sync`           | Create relative symlinks instead of absolute   |
-| `--verbose`, `-v` | All              | Verbose output                                 |
-| `--quiet`, `-q`   | All              | Suppress non-error output                      |
+| `--verbose`, `-v` | All              | Verbosity level: 0=errors only, 1=normal (default), 2=detailed |
 | `--config`, `-c`  | All              | Custom config file path                        |
 
 ## 🛡️ Safety Features

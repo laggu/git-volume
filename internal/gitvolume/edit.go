@@ -74,13 +74,13 @@ func (g *GitVolume) edit(targetPath, editor string) error {
 
 func (g *GitVolume) afterEdit(targetPath string, err error) error {
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to edit %s: %v\n", targetPath, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Failed to edit %s: %v\n", targetPath, err)
 		}
 		return err
 	}
 
-	if !g.quiet {
+	if g.isDetailed() {
 		fmt.Printf("✓ Edited %s\n", targetPath)
 	}
 	return nil

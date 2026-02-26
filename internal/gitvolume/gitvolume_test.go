@@ -63,9 +63,8 @@ func createTestGitVolume(sourceDir, targetDir, globalDir string, volumes []Volum
 	ctx.ResolveVolumePaths()
 
 	return &GitVolume{
-		ctx:     ctx,
-		verbose: false,
-		quiet:   true,
+		ctx:       ctx,
+		verbosity: VerbosityQuiet,
 	}
 }
 

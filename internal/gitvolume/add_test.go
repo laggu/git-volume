@@ -159,7 +159,7 @@ func TestGlobalAdd(t *testing.T) {
 		ctx: &Context{
 			GlobalDir: globalDir,
 		},
-		quiet: true,
+		verbosity: VerbosityQuiet,
 	}
 
 	// Create test files

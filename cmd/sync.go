@@ -24,11 +24,7 @@ It checks the current directory for git-volume.yaml first. If not found,
 it looks for it in the main Git worktree (inheritance).`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gv, err := gitvolume.New(gitvolume.Options{
-			ConfigPath: cfgFile,
-			Verbose:    verbose,
-			Quiet:      quiet,
-		})
+		gv, err := gitvolume.New(commandOptions(true))
 		if err != nil {
 			return err
 		}

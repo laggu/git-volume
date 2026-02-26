@@ -21,7 +21,7 @@ func TestGitVolume_GlobalEdit(t *testing.T) {
 		ctx: &Context{
 			GlobalDir: globalDir,
 		},
-		quiet: true,
+		verbosity: VerbosityQuiet,
 	}
 
 	t.Run("Edit existing file", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestGitVolume_GlobalEdit(t *testing.T) {
 			ctx: &Context{
 				GlobalDir: filepath.Join(tmpDir, "missing-global"),
 			},
-			quiet: true,
+			verbosity: VerbosityQuiet,
 		}
 		err := gvMissing.GlobalEdit("anything.txt")
 		assert.Error(t, err)

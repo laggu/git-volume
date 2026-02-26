@@ -170,7 +170,7 @@ volumes:
 			_ = tmpFile.Close()
 
 			// Run loadConfig
-			cfg, err := loadConfig(tmpFile.Name(), true)
+			cfg, err := loadConfig(tmpFile.Name(), VerbosityQuiet)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -268,7 +268,7 @@ func TestNewWorkspace_LocalConfig(t *testing.T) {
 	// Create context and load config
 	ctx, err := NewContext()
 	require.NoError(t, err)
-	require.NoError(t, ctx.Load("", true))
+	require.NoError(t, ctx.Load("", VerbosityQuiet))
 
 	assert.Equal(t, repoDir, resolvePath(ctx.SourceDir))
 	assert.Equal(t, repoDir, resolvePath(ctx.TargetDir))
@@ -299,7 +299,7 @@ func TestNewWorkspace_CustomPath(t *testing.T) {
 	// Create context with custom path
 	ctx, err := NewContext()
 	require.NoError(t, err)
-	require.NoError(t, ctx.Load(customConfigPath, true))
+	require.NoError(t, ctx.Load(customConfigPath, VerbosityQuiet))
 
 	assert.Equal(t, customDir, ctx.SourceDir)
 	assert.Equal(t, 1, len(ctx.Volumes))
@@ -318,7 +318,7 @@ func TestNewWorkspace_NoConfig(t *testing.T) {
 	// Create context and load should fail
 	ctx, err := NewContext()
 	require.NoError(t, err)
-	assert.Error(t, ctx.Load("", true))
+	assert.Error(t, ctx.Load("", VerbosityQuiet))
 }
 
 func TestNewWorkspace_EmptyConfig(t *testing.T) {
@@ -337,7 +337,7 @@ func TestNewWorkspace_EmptyConfig(t *testing.T) {
 	ctx, err := NewContext()
 	require.NoError(t, err)
 	// Should not error, just empty volumes
-	require.NoError(t, ctx.Load("", true))
+	require.NoError(t, ctx.Load("", VerbosityQuiet))
 	assert.Equal(t, 0, len(ctx.Volumes))
 }
 
@@ -363,7 +363,7 @@ func TestNewWorkspace_RelativeCustomPath(t *testing.T) {
 	// Create context with relative path
 	ctx, err := NewContext()
 	require.NoError(t, err)
-	require.NoError(t, ctx.Load("my-config.yaml", true))
+	require.NoError(t, ctx.Load("my-config.yaml", VerbosityQuiet))
 
 	assert.Equal(t, repoDir, resolvePath(ctx.SourceDir))
 }

@@ -144,8 +144,7 @@ volumes:
 | ----------------- | ---------------- | ---------------------------------------------------- |
 | `--dry-run`       | `sync`, `unsync` | Mostrar o que seria feito sem realizar alterações    |
 | `--relative`      | `sync`           | Criar links simbólicos relativos em vez de absolutos |
-| `--verbose`, `-v` | Todos            | Saída detalhada                                      |
-| `--quiet`, `-q`   | Todos            | Ocultar saída não relacionada a erros                |
+| `--verbose`, `-v` | Todos            | Nível de saída: 0=somente erros, 1=normal (padrão), 2=detalhado |
 | `--config`, `-c`  | Todos            | Caminho personalizado do arquivo de configuração     |
 
 ## 🛡️ Recursos de segurança

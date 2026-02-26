@@ -397,7 +397,7 @@ func TestGitVolume_Sync_Verbose(t *testing.T) {
 	}
 	ctx.ResolveVolumePaths()
 
-	gv := &GitVolume{ctx: ctx, verbose: true, quiet: false}
+	gv := &GitVolume{ctx: ctx, verbosity: VerbosityDetailed}
 
 	// Sync with verbose output
 	require.NoError(t, gv.Sync(SyncOptions{}))
@@ -426,7 +426,7 @@ func TestGitVolume_Sync_NonQuiet_Error(t *testing.T) {
 	}
 	ctx.ResolveVolumePaths()
 
-	gv := &GitVolume{ctx: ctx, verbose: false, quiet: false}
+	gv := &GitVolume{ctx: ctx, verbosity: VerbosityNormal}
 
 	// Should report error non-quietly
 	err := gv.Sync(SyncOptions{})

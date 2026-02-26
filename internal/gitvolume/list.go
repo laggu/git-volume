@@ -31,7 +31,7 @@ func (g *GitVolume) GlobalList() error {
 	}
 
 	if len(state.root.children) == 0 {
-		if !g.quiet {
+		if g.isNormalOrHigher() {
 			fmt.Println("Global storage is empty.")
 		}
 		return nil

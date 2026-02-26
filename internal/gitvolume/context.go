@@ -338,8 +338,7 @@ func NewContext() (*Context, error) {
 
 // Load loads configuration from config file and populates the Context.
 // configPath: custom config file path (empty string for auto-detection)
-// quiet: suppress warning messages
-func (c *Context) Load(configPath string, quiet bool) error {
+func (c *Context) Load(configPath string, verbosity int) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
@@ -358,7 +357,7 @@ func (c *Context) Load(configPath string, quiet bool) error {
 	}
 
 	// 3. Load and apply config
-	cfg, err := loadConfig(absConfigPath, quiet)
+	cfg, err := loadConfig(absConfigPath, verbosity)
 	if err != nil {
 		return err
 	}
@@ -433,7 +432,7 @@ type rawConfig struct {
 
 // loadConfig reads and parses the configuration file
 // Returns rawConfig and error
-func loadConfig(path string, quiet bool) (*rawConfig, error) {
+func loadConfig(path string, verbosity int) (*rawConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
@@ -445,7 +444,7 @@ func loadConfig(path string, quiet bool) (*rawConfig, error) {
 	}
 
 	// Warn if no volumes defined
-	if len(cfg.Volumes) == 0 && !quiet {
+	if len(cfg.Volumes) == 0 && verbosity >= VerbosityNormal {
 		fmt.Fprintf(os.Stderr, "⚠️  Warning: no volumes defined in %s\n", path)
 	}
 

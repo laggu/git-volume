@@ -24,7 +24,7 @@ func createTestGitVolumeWithGlobal(globalDir string) *GitVolume {
 		ctx: &Context{
 			GlobalDir: globalDir,
 		},
-		quiet: true, // suppress stdout in tests
+		verbosity: VerbosityQuiet,
 	}
 }
 
