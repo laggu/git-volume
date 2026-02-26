@@ -48,7 +48,6 @@ func (g *GitVolume) Load() error {
 	return g.ctx.Load(g.configPath, g.verbosity)
 }
 
-func (g *GitVolume) isErrorsOnly() bool     { return g.verbosity <= VerbosityQuiet }
 func (g *GitVolume) isNormalOrHigher() bool { return g.verbosity >= VerbosityNormal }
 func (g *GitVolume) isDetailed() bool       { return g.verbosity >= VerbosityDetailed }
 
