@@ -26,7 +26,7 @@ var globalListCmd = &cobra.Command{
 	Long:         `Displays a tree of all files currently stored in the global git-volume directory.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gv, err := gitvolume.New(gitvolume.Options{Quiet: quiet})
+		gv, err := gitvolume.New(commandOptions(false))
 		if err != nil {
 			return err
 		}

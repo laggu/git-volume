@@ -51,7 +51,7 @@ git init -q
 git config user.name "test"
 git config user.email "test@test.com"
 
-"$GV_BIN" init -q
+"$GV_BIN" init --verbose 0
 if [[ -d "$TEST_DIR/.git-volume" && -f "git-volume.yaml" ]]; then
     pass "init created necessary files"
 else
@@ -340,7 +340,7 @@ volumes:
 EOF
 
 # Sync
-"$GV_BIN" sync -q
+"$GV_BIN" sync --verbose 0
 
 # Verify directory was copied
 if [[ -d "copied_dir" && -f "copied_dir/a.txt" && -f "copied_dir/nested/b.txt" ]]; then
@@ -350,7 +350,7 @@ else
 fi
 
 # Unsync (unmodified directory should be removed)
-"$GV_BIN" unsync -q
+"$GV_BIN" unsync --verbose 0
 
 if [[ ! -d "copied_dir" ]]; then
     pass "unsync removed copy directory"
@@ -362,13 +362,13 @@ fi
 log "TEST" "Testing 'unsync' preserves modified copy directory..."
 
 # Re-sync
-"$GV_BIN" sync -q
+"$GV_BIN" sync --verbose 0
 
 # Modify a file inside the copied directory
 echo "MODIFIED" > copied_dir/a.txt
 
 # Unsync
-"$GV_BIN" unsync -q
+"$GV_BIN" unsync --verbose 0
 
 if [[ -d "copied_dir" ]]; then
     CONTENT=$(cat copied_dir/a.txt)

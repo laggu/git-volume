@@ -22,11 +22,7 @@ For copied files, it verifies that the file content has not changed compared
 to the source before deleting. If changed, it skips deletion to prevent data loss.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gv, err := gitvolume.New(gitvolume.Options{
-			ConfigPath: cfgFile,
-			Verbose:    verbose,
-			Quiet:      quiet,
-		})
+		gv, err := gitvolume.New(commandOptions(true))
 		if err != nil {
 			return err
 		}

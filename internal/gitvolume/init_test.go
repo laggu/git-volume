@@ -27,7 +27,7 @@ func TestInit(t *testing.T) {
 	// Setup GitVolume (GlobalDir will be in tmp)
 	globalDir := filepath.Join(tmpDir, "global")
 	gv := createTestGitVolume(repoDir, repoDir, globalDir, nil)
-	gv.quiet = true
+	gv.verbosity = VerbosityQuiet
 
 	// Test 1: Init success
 	err = gv.Init()
@@ -64,7 +64,7 @@ func TestInit_OutsideGit(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)
-	gv.quiet = true
+	gv.verbosity = VerbosityQuiet
 
 	// Test: Init fails
 	err = gv.Init()
@@ -86,7 +86,7 @@ func TestInit_NonQuiet(t *testing.T) {
 
 	globalDir := filepath.Join(tmpDir, "global")
 	gv := createTestGitVolume(repoDir, repoDir, globalDir, nil)
-	gv.quiet = false // Non-quiet to cover afterInit output branches
+	gv.verbosity = VerbosityNormal
 
 	// First init (configCreated branch)
 	err = gv.Init()
@@ -108,7 +108,7 @@ func TestInit_NonQuiet_Error(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)
-	gv.quiet = false // Non-quiet to cover error branch
+	gv.verbosity = VerbosityNormal
 
 	err = gv.Init()
 	assert.Error(t, err)

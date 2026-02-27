@@ -39,7 +39,7 @@ func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
 		}
 	}
 
-	if !g.quiet {
+	if g.isNormalOrHigher() {
 		fmt.Printf("📂 Using config from: %s\n", g.SourceDir())
 		fmt.Printf("🎯 Target worktree: %s\n", g.TargetDir())
 		if g.HasGlobalVolumes() {
@@ -51,10 +51,10 @@ func (g *GitVolume) beforeAllSync(opts SyncOptions) error {
 }
 
 func (g *GitVolume) afterAllSync(errs []error, opts SyncOptions) error {
-	if len(errs) > 0 && !g.quiet {
-		fmt.Printf("❌ Sync completed with %d error(s)\n", len(errs))
+	if len(errs) > 0 && g.isNormalOrHigher() {
+		fmt.Fprintf(os.Stderr, "❌ Sync completed with %d error(s)\n", len(errs))
 	}
-	if len(errs) == 0 && !g.quiet && !opts.DryRun {
+	if len(errs) == 0 && g.isNormalOrHigher() && !opts.DryRun {
 		fmt.Println("✓ Volumes successfully synced")
 	}
 	return errors.Join(errs...)
@@ -124,23 +124,25 @@ func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]e
 	displaySource := vol.DisplaySource()
 
 	if err != nil {
-		if !g.quiet {
-			fmt.Printf("❌ Failed to sync %s: %v\n", vol.Target, err)
+		if g.isNormalOrHigher() {
+			fmt.Fprintf(os.Stderr, "❌ Failed to sync %s: %v\n", vol.Target, err)
 		}
 		*errs = append(*errs, err)
 		return
 	}
 
 	if opts.DryRun {
-		action := "link"
-		if vol.Mode == ModeCopy {
-			action = "copy"
+		if g.isNormalOrHigher() {
+			action := "link"
+			if vol.Mode == ModeCopy {
+				action = "copy"
+			}
+			fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
 		}
-		fmt.Printf("[dry-run] Would %s %s -> %s\n", action, displaySource, vol.Target)
 		return
 	}
 
-	if g.verbose && !g.quiet {
+	if g.isDetailed() {
 		if vol.Mode == ModeCopy {
 			fmt.Printf("✓ Copied %s -> %s\n", displaySource, vol.Target)
 		} else {
@@ -163,7 +165,7 @@ func (g *GitVolume) syncCopy(src, dst string, srcInfo os.FileInfo) error {
 
 // syncLink handles link mode synchronization
 func (g *GitVolume) syncLink(src, dst string, relativeLink bool) error {
-		// Ensure parent directory exists
+	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(dst), DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}

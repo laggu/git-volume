@@ -16,15 +16,15 @@ git volume init [flags]
 
 ### Flags
 - `-h, --help`: help for init
-- `-q, --quiet`: suppress all output except errors
+- `-v, --verbose int`: verbosity level (0=errors only, 1=normal default, 2=detailed)
 
 ### Example
 ```bash
 # Basic initialization
 git volume init
 
-# Run quietly
-git volume init -q
+# Errors only output
+git volume init --verbose 0
 ```
 
 ---
@@ -45,7 +45,7 @@ git volume sync [flags]
 ### Flags
 - `--dry-run`: show what would be done without making actual changes
 - `--relative`: create relative symbolic links instead of absolute ones
-- `-v, --verbose`: verbose output
+- `-v, --verbose int`: verbosity level (0=errors only, 1=normal default, 2=detailed)
 - `-c, --config string`: manually specify config file path (default: auto-detected)
 
 ### Example
@@ -72,7 +72,7 @@ git volume unsync [flags]
 
 ### Flags
 - `--dry-run`: show what would be removed without actually deleting
-- `-v, --verbose`: verbose output
+- `-v, --verbose int`: verbosity level (0=errors only, 1=normal default, 2=detailed)
 
 ### Example
 ```bash
@@ -99,7 +99,7 @@ git volume status [flags]
 
 ### Flags
 - `-c, --config string`: specify configuration file path
-- (Note: The `status` command displays detailed information by default, which can be suppressed with the `-q` flag. The `-v` flag has no separate effect.)
+- `-v, --verbose int`: verbosity level (0=errors only, 1=normal default, 2=detailed)
 
 ### Example
 ```bash
@@ -181,5 +181,4 @@ git volume global edit dev.env
 Flags available for all commands.
 
 - `-c, --config`: specify config file path
-- `-v, --verbose`: verbose output mode
-- `-q, --quiet`: suppress output except errors
+- `-v, --verbose int`: verbosity level (`0=errors only`, `1=normal`, `2=detailed`)

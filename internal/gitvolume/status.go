@@ -21,7 +21,7 @@ func (g *GitVolume) beforeAllStatus() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if !g.quiet {
+	if g.isNormalOrHigher() {
 		fmt.Printf("📂 Source Config: %s\n", filepath.Join(g.SourceDir(), ConfigFileName))
 		fmt.Printf("🎯 Target Root:   %s\n", g.TargetDir())
 		if g.HasGlobalVolumes() {
@@ -44,6 +44,9 @@ func (g *GitVolume) status() ([]VolumeStatus, error) {
 func (g *GitVolume) afterAllStatus(statuses []VolumeStatus, err error) error {
 	if err != nil {
 		return err
+	}
+	if !g.isNormalOrHigher() {
+		return nil
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)

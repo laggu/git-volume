@@ -28,7 +28,7 @@ go mod download
 ## 아키텍처
 
 ### CLI 구조 (Cobra 기반)
-- `cmd/root.go` - 루트 명령어 및 전역 플래그 (`--config`, `--verbose`, `--quiet`)
+- `cmd/root.go` - 루트 명령어 및 전역 플래그 (`--config`, `--verbose`)
 - `cmd/*.go` - 각 서브커맨드 (init, sync, unsync, list, add, version)
 
 ### 핵심 패키지 (`internal/gitvolume`)

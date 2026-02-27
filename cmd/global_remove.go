@@ -21,7 +21,7 @@ Examples:
 	SilenceUsage: true,
 	Aliases:      []string{"rm"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		gv, err := gitvolume.New(gitvolume.Options{Quiet: quiet})
+		gv, err := gitvolume.New(commandOptions(false))
 		if err != nil {
 			return err
 		}
