@@ -33,8 +33,10 @@ func TestGitVolume_GlobalEdit(t *testing.T) {
 		// Mock EDITOR to a script that modifies the file
 		// We use printf to avoid portability issues with echo -n
 		originalEditor := os.Getenv("EDITOR")
-		defer os.Setenv("EDITOR", originalEditor)
-		os.Setenv("EDITOR", "sh -c 'printf \" - edited\" >> \"$1\"' --")
+		require.NoError(t, os.Setenv("EDITOR", "sh -c 'printf \" - edited\" >> \"$1\"' --"))
+		t.Cleanup(func() {
+			require.NoError(t, os.Setenv("EDITOR", originalEditor))
+		})
 
 		err = gv.GlobalEdit("config.txt")
 		assert.NoError(t, err)

@@ -86,7 +86,6 @@ func TestInit_BareRepository(t *testing.T) {
 
 	globalDir := filepath.Join(tmpDir, "global")
 	gv := createTestGitVolume(bareDir, bareDir, globalDir, nil)
-	gv.quiet = true
 
 	err = gv.Init()
 	require.NoError(t, err)
