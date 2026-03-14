@@ -27,12 +27,29 @@ func (g *GitVolume) beforeInit(state *initState) error {
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
-	gitRoot, err := FindWorktreeRoot(cwd)
+	gitRoot, err := findInitRoot(cwd)
 	if err != nil {
 		return fmt.Errorf("failed to find git repository root: %w", err)
 	}
 	state.configPath = filepath.Join(gitRoot, ConfigFileName)
 	return nil
+}
+
+// findInitRoot returns the directory where git-volume.yaml should be created.
+// In a normal repository or worktree, that is the current worktree root.
+// In a bare repository, that is the bare repository root itself.
+func findInitRoot(startDir string) (string, error) {
+	worktreeRoot, err := FindWorktreeRoot(startDir)
+	if err == nil {
+		return worktreeRoot, nil
+	}
+
+	commonDir, commonErr := findCommonDir(startDir)
+	if commonErr == nil {
+		return commonDir, nil
+	}
+
+	return "", fmt.Errorf("worktree lookup failed: %v; bare repository lookup failed: %w", err, commonErr)
 }
 
 func (g *GitVolume) init(state *initState) error {
