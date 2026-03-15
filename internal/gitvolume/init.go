@@ -44,7 +44,12 @@ func findInitRoot(startDir string) (string, error) {
 		return worktreeRoot, nil
 	}
 
-	return findCommonDir(startDir)
+	isBare, bareErr := isBareRepository(startDir)
+	if bareErr == nil && isBare {
+		return findCommonDir(startDir)
+	}
+
+	return "", err
 }
 
 func (g *GitVolume) init(state *initState) error {
