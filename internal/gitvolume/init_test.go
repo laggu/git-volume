@@ -21,7 +21,7 @@ func TestInit(t *testing.T) {
 	// Change CWD to repo
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }() // Restore CWD
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) }) // Restore CWD
 	require.NoError(t, os.Chdir(repoDir))
 
 	// Setup GitVolume (GlobalDir will be in tmp)
@@ -60,7 +60,7 @@ func TestInit_OutsideGit(t *testing.T) {
 	// Change CWD
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)
@@ -72,6 +72,32 @@ func TestInit_OutsideGit(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to find git repository root")
 }
 
+func TestInit_BareRepository(t *testing.T) {
+	tmpDir := t.TempDir()
+	bareDir := filepath.Join(tmpDir, "repo.git")
+
+	cmd := exec.Command("git", "init", "--bare", bareDir)
+	require.NoError(t, cmd.Run())
+
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
+	require.NoError(t, os.Chdir(bareDir))
+
+	globalDir := filepath.Join(tmpDir, "global")
+	gv := createTestGitVolume(bareDir, bareDir, globalDir, nil)
+
+	err = gv.Init()
+	require.NoError(t, err)
+
+	assert.DirExists(t, globalDir)
+	assert.FileExists(t, filepath.Join(bareDir, "git-volume.yaml"))
+
+	content, err := os.ReadFile(filepath.Join(bareDir, "git-volume.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "volumes:")
+}
+
 func TestInit_NonQuiet(t *testing.T) {
 	tmpDir := t.TempDir()
 	repoDir := filepath.Join(tmpDir, "repo")
@@ -81,7 +107,7 @@ func TestInit_NonQuiet(t *testing.T) {
 
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(repoDir))
 
 	globalDir := filepath.Join(tmpDir, "global")
@@ -104,7 +130,7 @@ func TestInit_NonQuiet_Error(t *testing.T) {
 
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)

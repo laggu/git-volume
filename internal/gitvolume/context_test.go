@@ -511,7 +511,9 @@ func TestCheckStatus(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup(t, tc.vol)
-			defer os.RemoveAll(tc.vol.TargetPath)
+			t.Cleanup(func() {
+				require.NoError(t, os.RemoveAll(tc.vol.TargetPath))
+			})
 
 			status := tc.vol.CheckStatus()
 			assert.Equal(t, tc.wantStatus, status.Status)

@@ -61,7 +61,9 @@ func TestGlobalRemove(t *testing.T) {
 func TestGlobalRemove_NotInitialized(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "git-volume-test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		require.NoError(t, os.RemoveAll(tmpDir))
+	})
 
 	// Point to a non-existent directory
 	globalDir := filepath.Join(tmpDir, "non_existent_global")

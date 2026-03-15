@@ -14,7 +14,9 @@ func TestFindCommonDir_Repro(t *testing.T) {
 	// Create a temporary directory for our test environment
 	tmpDir, err := os.MkdirTemp("", "git-volume-repro-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() {
+		require.NoError(t, os.RemoveAll(tmpDir))
+	})
 
 	// 1. Test Case: Bare Repository + Worktree
 	t.Run("Bare Repository with Worktree", func(t *testing.T) {
