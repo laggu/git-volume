@@ -21,7 +21,7 @@ func TestInit(t *testing.T) {
 	// Change CWD to repo
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }() // Restore CWD
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) }) // Restore CWD
 	require.NoError(t, os.Chdir(repoDir))
 
 	// Setup GitVolume (GlobalDir will be in tmp)
@@ -60,7 +60,7 @@ func TestInit_OutsideGit(t *testing.T) {
 	// Change CWD
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)
@@ -81,7 +81,7 @@ func TestInit_BareRepository(t *testing.T) {
 
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(bareDir))
 
 	globalDir := filepath.Join(tmpDir, "global")
@@ -107,7 +107,7 @@ func TestInit_NonQuiet(t *testing.T) {
 
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(repoDir))
 
 	globalDir := filepath.Join(tmpDir, "global")
@@ -130,7 +130,7 @@ func TestInit_NonQuiet_Error(t *testing.T) {
 
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	defer func() { _ = os.Chdir(wd) }()
+	t.Cleanup(func() { require.NoError(t, os.Chdir(wd)) })
 	require.NoError(t, os.Chdir(tmpDir))
 
 	gv := createTestGitVolume(tmpDir, tmpDir, filepath.Join(tmpDir, "global"), nil)
