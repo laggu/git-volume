@@ -44,12 +44,7 @@ func findInitRoot(startDir string) (string, error) {
 		return worktreeRoot, nil
 	}
 
-	commonDir, commonErr := findCommonDir(startDir)
-	if commonErr == nil {
-		return commonDir, nil
-	}
-
-	return "", fmt.Errorf("could not determine repository root: %w", commonErr)
+	return findCommonDir(startDir)
 }
 
 func (g *GitVolume) init(state *initState) error {
