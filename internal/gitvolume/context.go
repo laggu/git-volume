@@ -278,7 +278,7 @@ func (v *Volume) CheckStatus() VolumeStatus {
 		if !info.IsDir() {
 			return VolumeStatus{displaySource, v.Target, v.Mode, StatusExistsNotFile}
 		}
-		match, err := verifyDirHash(v.SourcePath, v.TargetPath)
+		match, err := verifyDirSubset(v.SourcePath, v.TargetPath)
 		if err != nil {
 			return VolumeStatus{displaySource, v.Target, v.Mode, StatusError}
 		}

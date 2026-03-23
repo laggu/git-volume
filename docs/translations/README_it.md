@@ -10,7 +10,7 @@
 
 - **Montaggio volumi**: Supporto per link simbolici o copia di file
 - **Ereditarietà della configurazione**: I worktree figli ereditano automaticamente la configurazione del genitore
-- **Pulizia sicura**: I file modificati dall'utente non vengono eliminati
+- **Pulizia sicura**: Il contenuto modificato dall'utente o non correlato non viene eliminato durante `unsync`
 - **Ottimizzato per agenti IA**: Creare worktree + configurare l'ambiente con un singolo comando
 
 ## 📦 Installazione
@@ -62,7 +62,7 @@ git volume status
 | -------------------------- | -------------------------------------------------------------------- |
 | `git volume init`          | Creare la directory globale e il file di configurazione esempio      |
 | `git volume sync`          | Montare i volumi nel worktree attuale basandosi sulla configurazione |
-| `git volume unsync`        | Rimuovere i volumi montati (i file modificati vengono preservati)    |
+| `git volume unsync`        | Rimuovere i volumi montati (il contenuto modificato o non correlato viene preservato) |
 | `git volume status`        | Mostrare lo stato attuale dei volumi                                 |
 | `git volume global add`    | Copiare file nell'archivio globale (`~/.git-volume`)                 |
 | `git volume global list`   | Elencare i file nell'archivio globale (vista ad albero)              |
@@ -84,7 +84,7 @@ volumes:
   # Montare dall'archivio globale (~/.git-volume)
   - "@global/secrets/prod.key:config/key"
 
-  # Montaggio directory (copia l'intera directory)
+  # Montaggio directory (fa overlay-copy solo delle voci source nella directory target)
   - mount: "configs:app/configs"
     mode: "copy"
 ```
@@ -94,7 +94,11 @@ volumes:
 | Modo   | Descrizione           | Caso d'uso                                                  |
 | ------ | --------------------- | ----------------------------------------------------------- |
 | `link` | Creare link simbolico | Sviluppo locale (le modifiche si riflettono immediatamente) |
-| `copy` | Copiare il file       | Build Docker (ambienti senza supporto link simbolici)       |
+| `copy` | Copiare il file / fare overlay-copy di directory | Build Docker (ambienti senza supporto link simbolici)       |
+
+### Comportamento delle directory in modalità copy
+
+Quando `mode: "copy"` usa una directory come source, `sync` sovrappone le voci source nella directory target senza eliminare la directory radice target. I file esistenti non correlati vengono preservati, i conflitti file/link simbolico vengono sostituiti e i conflitti file-vs-directory falliscono in modo sicuro. Anche `status` e `unsync` operano sul sottoinsieme copiato dalla source invece di richiedere che l'intera directory target corrisponda esattamente.
 
 ## 🔄 Ereditarietà dei worktree
 
@@ -151,8 +155,9 @@ volumes:
 
 - **Rifiuto sorgenti simboliche**: `sync` e `global add` rifiutano sorgenti che sono link simbolici per sicurezza
 - **Prevenzione path traversal**: Tutti i percorsi vengono validati per prevenire attacchi di escape dalla directory
-- **Rilevamento modifiche all'Unsync**: I file e le directory copiate vengono preservati se modificati
-- **Rilevamento modifiche allo Status**: I file copiati diversi dall'originale vengono mostrati come `MODIFIED`
+- **Sicurezza dell'overlay-copy**: La modalità copy delle directory preserva i file target non correlati, sostituisce solo i conflitti file/link simbolico e fallisce sui conflitti file-vs-directory
+- **Rilevamento modifiche all'Unsync**: `unsync` rimuove solo il sottoinsieme copiato dalla source e preserva il contenuto modificato o non correlato
+- **Rilevamento modifiche allo Status**: `status` mostra `MODIFIED` quando le voci source copiate differiscono dal target
 - **Sync idempotente**: Eseguire `sync` più volte produce sempre lo stesso risultato
 
 ## 📄 Licenza

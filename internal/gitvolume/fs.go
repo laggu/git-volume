@@ -2,6 +2,7 @@ package gitvolume
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -82,9 +83,17 @@ func copyDir(src, dst string) error {
 		}
 
 		if entryInfo.IsDir() {
-			if dstInfo, err := os.Lstat(dstPath); err == nil && !dstInfo.IsDir() {
-				return fmt.Errorf("target exists and is not a directory: %s", dstPath)
-			} else if err != nil && !os.IsNotExist(err) {
+			if dstInfo, err := os.Lstat(dstPath); err == nil {
+				if !dstInfo.IsDir() {
+					if dstInfo.Mode()&os.ModeSymlink != 0 || dstInfo.Mode().IsRegular() {
+						if err := os.Remove(dstPath); err != nil {
+							return fmt.Errorf("failed to remove conflicting target path: %w", err)
+						}
+					} else {
+						return fmt.Errorf("target exists and is not a directory: %s", dstPath)
+					}
+				}
+			} else if !os.IsNotExist(err) {
 				return err
 			}
 
@@ -96,12 +105,15 @@ func copyDir(src, dst string) error {
 
 		// If target exists, verify it's a regular file or symlink
 		if info, err := os.Lstat(dstPath); err == nil {
-			if info.Mode()&os.ModeSymlink != 0 {
+			if info.IsDir() {
+				return fmt.Errorf("target exists and is a directory: %s", dstPath)
+			}
+			if info.Mode()&os.ModeSymlink != 0 || info.Mode().IsRegular() {
 				if err := os.Remove(dstPath); err != nil {
-					return fmt.Errorf("failed to remove existing symlink: %w", err)
+					return fmt.Errorf("failed to remove existing target path: %w", err)
 				}
-			} else if !info.Mode().IsRegular() {
-				return fmt.Errorf("target exists and is not a regular file: %s", dstPath)
+			} else {
+				return fmt.Errorf("target exists and is not replaceable: %s", dstPath)
 			}
 		} else if !os.IsNotExist(err) {
 			return err
@@ -199,6 +211,155 @@ func verifyDirHash(dir1, dir2 string) (bool, error) {
 		return false, err
 	}
 	return h1 == h2, nil
+}
+
+var errDirSubsetMismatch = errors.New("directory subset mismatch")
+
+func verifyDirSubset(src, dst string) (bool, error) {
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return false, err
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
+	}
+
+	dstInfo, err := os.Lstat(dst)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !dstInfo.IsDir() {
+		return false, nil
+	}
+
+	err = filepath.WalkDir(src, func(current string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, err := filepath.Rel(src, current)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+
+		srcEntryInfo, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if srcEntryInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", current)
+		}
+
+		targetPath := filepath.Join(dst, rel)
+		targetInfo, err := os.Lstat(targetPath)
+		if os.IsNotExist(err) {
+			return errDirSubsetMismatch
+		}
+		if err != nil {
+			return err
+		}
+
+		if srcEntryInfo.IsDir() {
+			if !targetInfo.IsDir() {
+				return errDirSubsetMismatch
+			}
+			return nil
+		}
+
+		if !targetInfo.Mode().IsRegular() {
+			return errDirSubsetMismatch
+		}
+
+		match, err := verifyHash(current, targetPath)
+		if err != nil {
+			return err
+		}
+		if !match {
+			return errDirSubsetMismatch
+		}
+		return nil
+	})
+	if errors.Is(err, errDirSubsetMismatch) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func removeCopiedDirSubset(src, dst string) error {
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		entryInfo, err := os.Lstat(srcPath)
+		if err != nil {
+			return err
+		}
+		if entryInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", srcPath)
+		}
+
+		if entryInfo.IsDir() {
+			dstInfo, err := os.Lstat(dstPath)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if !dstInfo.IsDir() {
+				return fmt.Errorf("managed target path is not a directory: %s", dstPath)
+			}
+			if err := removeCopiedDirSubset(srcPath, dstPath); err != nil {
+				return err
+			}
+			if err := removeIfEmpty(dstPath); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func removeIfEmpty(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return nil
+	}
+	return os.Remove(dir)
 }
 
 // cleanEmptyParents removes empty parent directories up to (but not including) stopAt

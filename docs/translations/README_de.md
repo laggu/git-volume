@@ -10,7 +10,7 @@
 
 - **Volume-Mounting**: Unterstützung für symbolische Links oder Dateikopien
 - **Konfigurationsvererbung**: Kind-Worktrees erben automatisch die Eltern-Konfiguration
-- **Sichere Bereinigung**: Vom Benutzer geänderte Dateien werden nicht gelöscht
+- **Sichere Bereinigung**: Vom Benutzer geänderte oder nicht zugehörige Inhalte werden bei `unsync` nicht gelöscht
 - **KI-Agenten-optimiert**: Worktree erstellen + Umgebung konfigurieren mit einem einzigen Befehl
 
 ## 📦 Installation
@@ -62,7 +62,7 @@ git volume status
 | -------------------------- | ------------------------------------------------------------------- |
 | `git volume init`          | Globales Verzeichnis und Beispielkonfiguration erstellen            |
 | `git volume sync`          | Volumes basierend auf Konfiguration im aktuellen Worktree einbinden |
-| `git volume unsync`        | Eingebundene Volumes entfernen (geänderte Dateien bleiben erhalten) |
+| `git volume unsync`        | Eingebundene Volumes entfernen (geänderte oder nicht zugehörige Inhalte bleiben erhalten) |
 | `git volume status`        | Aktuellen Volume-Status anzeigen                                    |
 | `git volume global add`    | Dateien in den globalen Speicher kopieren (`~/.git-volume`)         |
 | `git volume global list`   | Dateien im globalen Speicher auflisten (Baumansicht)                |
@@ -84,7 +84,7 @@ volumes:
   # Aus globalem Speicher einbinden (~/.git-volume)
   - "@global/secrets/prod.key:config/key"
 
-  # Verzeichnis-Mounting (kopiert gesamtes Verzeichnis)
+  # Verzeichnis-Mounting (kopiert nur die Source-Einträge als Overlay in das Zielverzeichnis)
   - mount: "configs:app/configs"
     mode: "copy"
 ```
@@ -94,7 +94,11 @@ volumes:
 | Modus  | Beschreibung                | Anwendungsfall                                  |
 | ------ | --------------------------- | ----------------------------------------------- |
 | `link` | Symbolischen Link erstellen | Lokale Entwicklung (Änderungen sofort wirksam)  |
-| `copy` | Datei kopieren              | Docker-Builds (Umgebungen ohne Symlink-Support) |
+| `copy` | Datei kopieren / Verzeichnis als Overlay kopieren | Docker-Builds (Umgebungen ohne Symlink-Support) |
+
+### Verzeichnisverhalten im Copy-Modus
+
+Wenn `mode: "copy"` ein Verzeichnis als Source verwendet, legt `sync` die Source-Einträge als Overlay in das Zielverzeichnis, ohne das Zielwurzelverzeichnis zu löschen. Nicht zugehörige vorhandene Dateien bleiben erhalten, Datei-/Symlink-Konflikte werden ersetzt und Datei-gegen-Verzeichnis-Konflikte schlagen sicher fehl. `status` und `unsync` arbeiten ebenfalls auf dem kopierten Source-Subset, statt eine exakte Übereinstimmung des gesamten Zielverzeichnisses zu verlangen.
 
 ## 🔄 Worktree-Vererbung
 
@@ -151,8 +155,9 @@ volumes:
 
 - **Ablehnung symbolischer Quellen**: `sync` und `global add` lehnen Quellen ab, die symbolische Links sind
 - **Pfad-Traversal-Schutz**: Alle Pfade werden validiert, um Verzeichnis-Escape-Angriffe zu verhindern
-- **Änderungserkennung bei Unsync**: Kopierte Dateien und Verzeichnisse werden beibehalten, wenn sie geändert wurden
-- **Änderungserkennung bei Status**: Kopierte Dateien, die vom Original abweichen, werden als `MODIFIED` angezeigt
+- **Overlay-Copy-Sicherheit**: Der Verzeichnis-Copy-Modus behält nicht zugehörige Zieldateien bei, ersetzt nur Datei-/Symlink-Konflikte und scheitert bei Datei-gegen-Verzeichnis-Konflikten
+- **Änderungserkennung bei Unsync**: `unsync` entfernt nur das kopierte Source-Subset und behält geänderte oder nicht zugehörige Inhalte bei
+- **Änderungserkennung bei Status**: `status` zeigt `MODIFIED`, wenn kopierte Source-Einträge vom Ziel abweichen
 - **Idempotentes Sync**: Mehrfaches Ausführen von `sync` erzeugt immer das gleiche Ergebnis
 
 ## 📄 Lizenz

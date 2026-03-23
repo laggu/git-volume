@@ -292,6 +292,40 @@ func TestGitVolume_Unsync_CopyDirectory(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "config directory should be removed after unsync")
 }
 
+func TestGitVolume_Unsync_CopyDirectory_PreservesExtraFiles(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(filepath.Join(configDir, "nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "nested", "db.env"), []byte("B=2"), 0644))
+
+	targetConfig := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(filepath.Join(targetConfig, "keep"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfig, "keep", "local.txt"), []byte("LOCAL"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	_, err := os.Stat(filepath.Join(targetConfig, "app.env"))
+	assert.True(t, os.IsNotExist(err), "managed file should be removed")
+	_, err = os.Stat(filepath.Join(targetConfig, "nested", "db.env"))
+	assert.True(t, os.IsNotExist(err), "managed nested file should be removed")
+
+	content, err := os.ReadFile(filepath.Join(targetConfig, "keep", "local.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "LOCAL", string(content), "unrelated extra file should be preserved")
+
+	_, err = os.Stat(targetConfig)
+	assert.NoError(t, err, "target directory should remain when extra files exist")
+}
+
 func TestGitVolume_Unsync_CopyDirectory_Modified(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()

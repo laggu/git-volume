@@ -10,7 +10,7 @@
 
 - **Montagem de volumes**: Suporte para links simbólicos ou cópia de arquivos
 - **Herança de configuração**: Árvores de trabalho filhas herdam automaticamente a configuração pai
-- **Limpeza segura**: Arquivos modificados pelo usuário não são excluídos
+- **Limpeza segura**: Conteúdo modificado pelo usuário ou não relacionado não é excluído durante o `unsync`
 - **Otimizado para agentes IA**: Criar árvore de trabalho + configurar ambiente com um único comando
 
 ## 📦 Instalação
@@ -62,7 +62,7 @@ git volume status
 | -------------------------- | ---------------------------------------------------------------- |
 | `git volume init`          | Criar diretório global e arquivo de configuração exemplo         |
 | `git volume sync`          | Montar volumes na árvore de trabalho atual                       |
-| `git volume unsync`        | Remover volumes montados (arquivos modificados são preservados)  |
+| `git volume unsync`        | Remover volumes montados (conteúdo modificado ou não relacionado é preservado) |
 | `git volume status`        | Exibir o status atual dos volumes                                |
 | `git volume global add`    | Copiar arquivos para o armazenamento global (`~/.git-volume`)    |
 | `git volume global list`   | Listar arquivos no armazenamento global (visualização em árvore) |
@@ -84,7 +84,7 @@ volumes:
   # Montar do armazenamento global (~/.git-volume)
   - "@global/secrets/prod.key:config/key"
 
-  # Montagem de diretórios (copia o diretório inteiro)
+  # Montagem de diretórios (faz overlay-copy apenas das entradas do source no diretório target)
   - mount: "configs:app/configs"
     mode: "copy"
 ```
@@ -94,7 +94,11 @@ volumes:
 | Modo   | Descrição            | Caso de uso                                               |
 | ------ | -------------------- | --------------------------------------------------------- |
 | `link` | Criar link simbólico | Desenvolvimento local (alterações refletem imediatamente) |
-| `copy` | Copiar arquivo       | Builds Docker (ambientes sem suporte a links simbólicos)  |
+| `copy` | Copiar arquivo / fazer overlay-copy de diretório | Builds Docker (ambientes sem suporte a links simbólicos)  |
+
+### Comportamento de diretório no modo copy
+
+Quando `mode: "copy"` usa um diretório como source, o `sync` faz overlay das entradas do source no diretório target sem apagar o diretório raiz target. Arquivos existentes não relacionados são preservados, conflitos com arquivo/link simbólico são substituídos e conflitos arquivo-vs-diretório falham com segurança. `status` e `unsync` também operam sobre o subconjunto copiado do source, em vez de exigir que todo o diretório target seja idêntico.
 
 ## 🔄 Herança de árvores de trabalho
 
@@ -151,8 +155,9 @@ volumes:
 
 - **Rejeição de fontes simbólicas**: `sync` e `global add` rejeitam fontes que são links simbólicos por segurança
 - **Prevenção de travessia de caminho**: Todos os caminhos são validados para prevenir ataques de escape de diretório
-- **Detecção de alterações no Unsync**: Arquivos e diretórios copiados são preservados se modificados
-- **Detecção de alterações no Status**: Arquivos copiados diferentes do original são exibidos como `MODIFIED`
+- **Segurança de overlay-copy**: O modo copy de diretório preserva arquivos target não relacionados, substitui apenas conflitos de arquivo/link simbólico e falha em conflitos arquivo-vs-diretório
+- **Detecção de alterações no Unsync**: `unsync` remove apenas o subconjunto copiado do source e preserva conteúdo modificado ou não relacionado
+- **Detecção de alterações no Status**: `status` mostra `MODIFIED` quando as entradas copiadas do source diferem do target
 - **Sync idempotente**: Executar `sync` múltiplas vezes sempre produz o mesmo resultado
 
 ## 📄 Licença
