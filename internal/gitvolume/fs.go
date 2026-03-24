@@ -55,19 +55,19 @@ func copyFile(src, dst string) error {
 func copyDir(src, dst string) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source directory %s: %w", src, err)
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
 	}
 
 	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
-		return err
+		return fmt.Errorf("failed to create target directory %s: %w", dst, err)
 	}
 
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source directory %s: %w", src, err)
 	}
 
 	for _, entry := range entries {
@@ -76,7 +76,7 @@ func copyDir(src, dst string) error {
 
 		entryInfo, err := os.Lstat(srcPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to stat source entry %s: %w", srcPath, err)
 		}
 		if entryInfo.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", srcPath)
@@ -94,11 +94,11 @@ func copyDir(src, dst string) error {
 					}
 				}
 			} else if !os.IsNotExist(err) {
-				return err
+				return fmt.Errorf("failed to stat target path %s: %w", dstPath, err)
 			}
 
 			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
+				return fmt.Errorf("failed to copy directory %s to %s: %w", srcPath, dstPath, err)
 			}
 			continue
 		}
@@ -116,11 +116,11 @@ func copyDir(src, dst string) error {
 				return fmt.Errorf("target exists and is not replaceable: %s", dstPath)
 			}
 		} else if !os.IsNotExist(err) {
-			return err
+			return fmt.Errorf("failed to stat target path %s: %w", dstPath, err)
 		}
 
 		if err := copyFile(srcPath, dstPath); err != nil {
-			return err
+			return fmt.Errorf("failed to copy file %s to %s: %w", srcPath, dstPath, err)
 		}
 	}
 
@@ -155,70 +155,12 @@ func verifyHash(file1, file2 string) (bool, error) {
 	return h1 == h2, nil
 }
 
-func hashDir(path string) (string, error) {
-	h := sha256.New()
-
-	err := filepath.WalkDir(path, func(current string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		rel, err := filepath.Rel(path, current)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-
-		info, err := os.Lstat(current)
-		if err != nil {
-			return err
-		}
-
-		switch {
-		case info.Mode()&os.ModeSymlink != 0:
-			target, err := os.Readlink(current)
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintf(h, "L|%s|%s\n", rel, target)
-			return err
-		case info.IsDir():
-			_, err = fmt.Fprintf(h, "D|%s\n", rel)
-			return err
-		default:
-			fileHash, err := hashFile(current)
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintf(h, "F|%s|%s\n", rel, fileHash)
-			return err
-		}
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
-func verifyDirHash(dir1, dir2 string) (bool, error) {
-	h1, err := hashDir(dir1)
-	if err != nil {
-		return false, err
-	}
-	h2, err := hashDir(dir2)
-	if err != nil {
-		return false, err
-	}
-	return h1 == h2, nil
-}
-
 var errDirSubsetMismatch = errors.New("directory subset mismatch")
 
 func verifyDirSubset(src, dst string) (bool, error) {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to stat source directory %s: %w", src, err)
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
 		return false, fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
@@ -229,7 +171,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to stat target directory %s: %w", dst, err)
 	}
 	if !dstInfo.IsDir() {
 		return false, nil
@@ -237,12 +179,12 @@ func verifyDirSubset(src, dst string) (bool, error) {
 
 	err = filepath.WalkDir(src, func(current string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return walkErr
+			return fmt.Errorf("failed to walk source directory %s: %w", current, walkErr)
 		}
 
 		rel, err := filepath.Rel(src, current)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to resolve relative path for %s from %s: %w", current, src, err)
 		}
 		if rel == "." {
 			return nil
@@ -250,7 +192,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 
 		srcEntryInfo, err := os.Lstat(current)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to stat source entry %s: %w", current, err)
 		}
 		if srcEntryInfo.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", current)
@@ -262,7 +204,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 			return errDirSubsetMismatch
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to stat target path %s: %w", targetPath, err)
 		}
 
 		if srcEntryInfo.IsDir() {
@@ -278,7 +220,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 
 		match, err := verifyHash(current, targetPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to compare %s and %s: %w", current, targetPath, err)
 		}
 		if !match {
 			return errDirSubsetMismatch
@@ -289,7 +231,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to verify copied directory subset %s against %s: %w", src, dst, err)
 	}
 	return true, nil
 }
@@ -297,7 +239,7 @@ func verifyDirSubset(src, dst string) (bool, error) {
 func removeCopiedDirSubset(src, dst string) error {
 	srcInfo, err := os.Lstat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source directory %s: %w", src, err)
 	}
 	if srcInfo.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("security: source directory is a symlink, which is not allowed: %s", src)
@@ -305,7 +247,7 @@ func removeCopiedDirSubset(src, dst string) error {
 
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source directory %s: %w", src, err)
 	}
 
 	for _, entry := range entries {
@@ -314,7 +256,7 @@ func removeCopiedDirSubset(src, dst string) error {
 
 		entryInfo, err := os.Lstat(srcPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to stat source entry %s: %w", srcPath, err)
 		}
 		if entryInfo.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("security: source directory contains a symlink, which is not allowed: %s", srcPath)
@@ -326,22 +268,22 @@ func removeCopiedDirSubset(src, dst string) error {
 				continue
 			}
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to stat target path %s: %w", dstPath, err)
 			}
 			if !dstInfo.IsDir() {
 				return fmt.Errorf("managed target path is not a directory: %s", dstPath)
 			}
 			if err := removeCopiedDirSubset(srcPath, dstPath); err != nil {
-				return err
+				return fmt.Errorf("failed to remove copied directory subset %s from %s: %w", srcPath, dstPath, err)
 			}
 			if err := removeIfEmpty(dstPath); err != nil {
-				return err
+				return fmt.Errorf("failed to clean empty target directory %s: %w", dstPath, err)
 			}
 			continue
 		}
 
 		if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
-			return err
+			return fmt.Errorf("failed to remove target path %s: %w", dstPath, err)
 		}
 	}
 
@@ -354,12 +296,15 @@ func removeIfEmpty(dir string) error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read directory %s: %w", dir, err)
 	}
 	if len(entries) > 0 {
 		return nil
 	}
-	return os.Remove(dir)
+	if err := os.Remove(dir); err != nil {
+		return fmt.Errorf("failed to remove empty directory %s: %w", dir, err)
+	}
+	return nil
 }
 
 // cleanEmptyParents removes empty parent directories up to (but not including) stopAt
