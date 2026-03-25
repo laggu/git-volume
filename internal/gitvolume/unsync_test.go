@@ -231,6 +231,29 @@ func TestGitVolume_Unsync_Copy_MissingSource(t *testing.T) {
 	assert.NoError(t, err, "Copy should NOT be removed if source is missing")
 }
 
+func TestGitVolume_Unsync_Copy_SymlinkSourcePreservesTarget(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	volumes := []Volume{
+		{Source: "source1.txt", Target: "copy.txt", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	realSource := filepath.Join(sourceDir, "source1.txt")
+	replacement := filepath.Join(sourceDir, "source2.txt")
+	require.NoError(t, os.Remove(realSource))
+	require.NoError(t, os.Symlink(replacement, realSource))
+
+	require.NoError(t, gv.Unsync(UnsyncOptions{}))
+
+	content, err := os.ReadFile(filepath.Join(targetDir, "copy.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "content1", string(content), "copy target should be preserved when source becomes a symlink")
+}
+
 func TestGitVolume_Unsync_RelativeLink(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()

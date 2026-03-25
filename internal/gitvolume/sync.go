@@ -136,7 +136,7 @@ func (g *GitVolume) prepareCopyDirectoryTarget(targetPath string) error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat target path %s: %w", targetPath, err)
 	}
 	if info.IsDir() {
 		return nil

@@ -114,9 +114,12 @@ func (g *GitVolume) checkRemovable(vol Volume) (bool, error) {
 
 	if vol.Mode == ModeCopy {
 		// Copy Mode: Check content hash (file or directory)
-		srcInfo, err := os.Stat(vol.SourcePath)
+		srcInfo, err := os.Lstat(vol.SourcePath)
 		if err != nil {
 			return false, fmt.Errorf("could not verify content (source missing?)")
+		}
+		if srcInfo.Mode()&os.ModeSymlink != 0 {
+			return false, fmt.Errorf("could not verify content (source is a symlink)")
 		}
 		if srcInfo.IsDir() {
 			if !info.IsDir() {
@@ -159,9 +162,12 @@ func (g *GitVolume) removeVolume(vol Volume) error {
 	}
 
 	if vol.Mode == ModeCopy {
-		srcInfo, err := os.Stat(vol.SourcePath)
+		srcInfo, err := os.Lstat(vol.SourcePath)
 		if err != nil {
 			return fmt.Errorf("failed to stat source %s: %w", vol.SourcePath, err)
+		}
+		if srcInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("security: source is a symlink, which is not allowed: %s", vol.SourcePath)
 		}
 		if srcInfo.IsDir() && info.IsDir() {
 			if err := removeCopiedDirSubset(vol.SourcePath, vol.TargetPath); err != nil {
