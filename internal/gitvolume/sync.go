@@ -97,6 +97,16 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 		return nil
 	}
 
+	if vol.Mode == ModeCopy && srcInfo.IsDir() {
+		if err := g.prepareCopyDirectoryTarget(vol.TargetPath); err != nil {
+			return fmt.Errorf("failed to prepare target directory %s: %w", vol.Target, err)
+		}
+		if err := g.syncCopy(vol.SourcePath, vol.TargetPath, srcInfo); err != nil {
+			return fmt.Errorf("failed to copy %s to %s: %w", vol.SourcePath, vol.TargetPath, err)
+		}
+		return nil
+	}
+
 	// Delete-and-Recreate strategy (Idempotency):
 	// ensuring the target state exactly matches the source state.
 	// We always remove the target path before syncing to guarantees a clean slate.
@@ -118,6 +128,23 @@ func (g *GitVolume) sync(vol Volume, srcInfo os.FileInfo, opts SyncOptions) erro
 		}
 	}
 	return nil
+}
+
+func (g *GitVolume) prepareCopyDirectoryTarget(targetPath string) error {
+	info, err := os.Lstat(targetPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to stat target path %s: %w", targetPath, err)
+	}
+	if info.IsDir() {
+		return nil
+	}
+	if info.Mode()&os.ModeSymlink != 0 || info.Mode().IsRegular() {
+		return os.Remove(targetPath)
+	}
+	return fmt.Errorf("target exists and is not replaceable: %s", targetPath)
 }
 
 func (g *GitVolume) afterSync(vol Volume, opts SyncOptions, err error, errs *[]error) {

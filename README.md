@@ -10,7 +10,7 @@
 
 - **Volume Mounting**: Supports symbolic links or file copy modes
 - **Configuration Inheritance**: Child worktrees automatically inherit parent settings
-- **Safe Cleanup**: Modified files are preserved during unsync
+- **Safe Cleanup**: Modified or unrelated copied contents are preserved during unsync
 - **AI Agent Optimized**: Create worktree + configure environment with a single command
 
 ## 📦 Installation
@@ -62,7 +62,7 @@ git volume status
 | -------------------------- | -------------------------------------------------------- |
 | `git volume init`          | Create global directory and sample configuration file    |
 | `git volume sync`          | Mount volumes to current worktree based on configuration |
-| `git volume unsync`        | Remove mounted volumes (modified files are preserved)    |
+| `git volume unsync`        | Remove mounted volumes (modified or unrelated contents are preserved) |
 | `git volume status`        | Display current volume status                            |
 | `git volume global add`    | Copy files to global storage (`~/.git-volume`)           |
 | `git volume global list`   | List files in global storage (tree view)                 |
@@ -84,7 +84,7 @@ volumes:
   # Mount from global storage (~/.git-volume)
   - "@global/secrets/prod.key:config/key"
 
-  # Directory mount (copies entire directory)
+  # Directory mount (overlay-copies source entries into target directory)
   - mount: "configs:app/configs"
     mode: "copy"
 ```
@@ -94,7 +94,11 @@ volumes:
 | Mode   | Description          | Use Case                                             |
 | ------ | -------------------- | ---------------------------------------------------- |
 | `link` | Create symbolic link | Local development (changes reflect immediately)      |
-| `copy` | Copy file            | Docker builds (environments without symlink support) |
+| `copy` | Copy file or overlay-copy directory | Docker builds (environments without symlink support) |
+
+### Copy-mode directory behavior
+
+When `mode: "copy"` uses a directory source, `sync` overlays the source entries into the target directory instead of deleting the target root directory. Existing unrelated files are preserved, file/symlink conflicts are replaced, and file-vs-directory conflicts fail safely. `status` and `unsync` operate on the copied source subset rather than requiring the whole target directory to match exactly.
 
 ## 🔄 Worktree Inheritance
 
@@ -151,8 +155,9 @@ volumes:
 
 - **Symlink Source Rejection**: `sync` and `global add` reject symlink sources for security
 - **Path Traversal Prevention**: All paths are validated to prevent directory escape attacks
-- **Change Detection on Unsync**: Copied files and directories are preserved if modified
-- **Change Detection on Status**: `status` reports `MODIFIED` when copied targets differ from source
+- **Overlay Copy Safety**: Directory copy mode preserves unrelated target files, replaces file/symlink conflicts, and fails on file-vs-directory conflicts
+- **Change Detection on Unsync**: `unsync` removes only the copied source subset and preserves modified or unrelated contents
+- **Change Detection on Status**: `status` reports `MODIFIED` when copied source entries differ from target
 - **Idempotent Sync**: Running `sync` multiple times always produces the same result
 
 ## 📄 License

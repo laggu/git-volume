@@ -35,6 +35,7 @@ git volume init --verbose 0
 Mounts volumes to the current Worktree according to the `git-volume.yaml` configuration.
 - Searches for settings in the current directory; if not found, traverses parent directories (towards the Git Common Dir) to inherit settings.
 - Mounts files/directories according to the configured mode (`link` or `copy`).
+- In `copy` mode with a directory source, overlays the source entries into the target directory instead of deleting the target root directory. Unrelated target files are preserved, file/symlink conflicts are replaced, and file-vs-directory conflicts fail safely.
 - Rejects symlink sources for security.
 
 ### Usage
@@ -64,6 +65,7 @@ git volume sync --dry-run
 ### Purpose
 Removes symbolic links or copied files created by the `sync` command.
 - **Safety Mechanism**: If a file mounted in `copy` mode has been modified, deletion is skipped to prevent data loss.
+- For directory sources in `copy` mode, removes only the copied source subset. Unrelated files already present in the target directory are preserved.
 
 ### Usage
 ```bash
@@ -91,6 +93,7 @@ git volume unsync --dry-run
 Displays a list of the status of currently configured volumes.
 - Shows Source, Target, Mode (Link/Copy), and Status.
 - Common status values include `OK (Linked)`, `OK (Copied)`, `MODIFIED`, `NOT MOUNTED`, and `MISSING (Source)`.
+- For directory sources in `copy` mode, `OK (Copied)` means every copied source entry matches in the target directory; extra unrelated target files do not affect status.
 
 ### Usage
 ```bash

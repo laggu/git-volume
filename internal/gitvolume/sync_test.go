@@ -99,6 +99,41 @@ func TestGitVolume_Sync_CopyDirectory_ExistingTargetOverwrites(t *testing.T) {
 	assert.Equal(t, "A=1", string(data))
 }
 
+func TestGitVolume_Sync_CopyDirectory_PreservesExistingTargetDirectoryContents(t *testing.T) {
+	sourceDir, targetDir, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	configDir := filepath.Join(sourceDir, "config")
+	require.NoError(t, os.MkdirAll(filepath.Join(configDir, "nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "app.env"), []byte("A=1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "nested", "source.txt"), []byte("SRC"), 0644))
+
+	targetConfigDir := filepath.Join(targetDir, "config")
+	require.NoError(t, os.MkdirAll(filepath.Join(targetConfigDir, "keep"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "keep", "local.txt"), []byte("LOCAL"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "app.env"), []byte("OLD"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(targetConfigDir, "nested"), []byte("conflicting file"), 0644))
+
+	volumes := []Volume{
+		{Source: "config", Target: "config", Mode: ModeCopy},
+	}
+	gv := createTestGitVolume(sourceDir, targetDir, "", volumes)
+
+	require.NoError(t, gv.Sync(SyncOptions{}))
+
+	data, err := os.ReadFile(filepath.Join(targetConfigDir, "app.env"))
+	require.NoError(t, err)
+	assert.Equal(t, "A=1", string(data))
+
+	data, err = os.ReadFile(filepath.Join(targetConfigDir, "nested", "source.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "SRC", string(data))
+
+	data, err = os.ReadFile(filepath.Join(targetConfigDir, "keep", "local.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "LOCAL", string(data), "existing unrelated files in target directory should be preserved")
+}
+
 func TestGitVolume_Sync_Link_ExistingTargetOverwrites(t *testing.T) {
 	sourceDir, targetDir, cleanup := setupTestEnv(t)
 	defer cleanup()

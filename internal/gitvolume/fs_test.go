@@ -79,6 +79,56 @@ func TestCopyDir(t *testing.T) {
 	// Linux/Mac: "not a directory"
 }
 
+func TestCopyDir_PreservesDestinationRootAndReplacesConflicts(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "src")
+	dst := filepath.Join(tmpDir, "dst")
+
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "nested"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "app.env"), []byte("SRC_APP"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "nested", "child.txt"), []byte("SRC_CHILD"), 0644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dst, "keep"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dst, "keep", "local.txt"), []byte("LOCAL"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dst, "app.env"), []byte("OLD_APP"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dst, "nested"), []byte("conflicting file"), 0644))
+
+	err := copyDir(src, dst)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(filepath.Join(dst, "app.env"))
+	require.NoError(t, err)
+	assert.Equal(t, "SRC_APP", string(content))
+
+	content, err = os.ReadFile(filepath.Join(dst, "nested", "child.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "SRC_CHILD", string(content))
+
+	content, err = os.ReadFile(filepath.Join(dst, "keep", "local.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "LOCAL", string(content), "unrelated files in destination root should be preserved")
+}
+
+func TestCopyDir_FileDoesNotReplaceExistingDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "src")
+	dst := filepath.Join(tmpDir, "dst")
+
+	require.NoError(t, os.MkdirAll(src, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "keep"), []byte("SRC_FILE"), 0644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dst, "keep"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(dst, "keep", "local.txt"), []byte("LOCAL"), 0644))
+
+	err := copyDir(src, dst)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target exists and is a directory")
+
+	content, readErr := os.ReadFile(filepath.Join(dst, "keep", "local.txt"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "LOCAL", string(content), "existing directory subtree should be preserved on conflict")
+}
+
 func TestHashAndVerify(t *testing.T) {
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "file1.txt")

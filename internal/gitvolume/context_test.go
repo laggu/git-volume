@@ -506,6 +506,19 @@ func TestCheckStatus(t *testing.T) {
 			},
 			wantStatus: StatusModified,
 		},
+		{
+			name: "Copy Dir OK With Extra Target Files",
+			vol:  createVol("statusdir3", "statusdir_extra", ModeCopy),
+			setup: func(t *testing.T, vol Volume) {
+				require.NoError(t, os.MkdirAll(filepath.Join(vol.SourcePath, "nested"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "f.txt"), []byte("data"), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.SourcePath, "nested", "child.txt"), []byte("child"), 0644))
+				require.NoError(t, os.MkdirAll(filepath.Join(vol.TargetPath, "keep"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(vol.TargetPath, "keep", "local.txt"), []byte("local"), 0644))
+				require.NoError(t, copyDir(vol.SourcePath, vol.TargetPath))
+			},
+			wantStatus: StatusOKCopied,
+		},
 	}
 
 	for _, tc := range testCases {

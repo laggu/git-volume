@@ -10,7 +10,7 @@
 
 - **卷挂载**: 支持符号链接或文件复制模式
 - **配置继承**: 子工作树自动继承父工作树的配置
-- **安全清理**: 用户修改过的文件不会被删除
+- **安全清理**: 用户修改过的内容或无关的复制内容在 unsync 时不会被删除
 - **AI 代理优化**: 一条命令即可创建工作树并配置环境
 
 ## 📦 安装
@@ -62,7 +62,7 @@ git volume status
 | -------------------------- | ------------------------------------- |
 | `git volume init`          | 创建全局目录和示例配置文件            |
 | `git volume sync`          | 根据配置将卷挂载到当前工作树          |
-| `git volume unsync`        | 移除已挂载的卷（已修改的文件会保留）  |
+| `git volume unsync`        | 移除已挂载的卷（已修改或无关的内容会保留） |
 | `git volume status`        | 显示当前卷的状态                      |
 | `git volume global add`    | 将文件复制到全局存储(`~/.git-volume`) |
 | `git volume global list`   | 列出全局存储中的文件（树形视图）      |
@@ -84,7 +84,7 @@ volumes:
   # 从全局存储挂载 (~/.git-volume)
   - "@global/secrets/prod.key:config/key"
 
-  # 目录挂载（复制整个目录）
+  # 目录挂载（仅将 source 条目 overlay 复制到 target 目录）
   - mount: "configs:app/configs"
     mode: "copy"
 ```
@@ -94,7 +94,11 @@ volumes:
 | 模式   | 说明         | 用途                                |
 | ------ | ------------ | ----------------------------------- |
 | `link` | 创建符号链接 | 本地开发（修改立即反映）            |
-| `copy` | 复制文件     | Docker 构建（不支持符号链接的环境） |
+| `copy` | 复制文件 / overlay 复制目录 | Docker 构建（不支持符号链接的环境） |
+
+### Copy 模式目录行为
+
+当 `mode: "copy"` 的 source 是目录时，`sync` 不会删除 target 根目录，而是只把 source 条目 overlay 到 target 目录中。无关的现有文件会保留，文件/符号链接冲突会被替换，文件与目录冲突会安全失败。`status` 和 `unsync` 也只按复制的 source 子集处理，而不是要求整个目标目录完全一致。
 
 ## 🔄 工作树继承
 
@@ -151,8 +155,9 @@ volumes:
 
 - **符号链接源拒绝**: `sync` 和 `global add` 出于安全考虑拒绝符号链接源
 - **路径遍历防护**: 所有路径都经过验证以防止目录逃逸攻击
-- **Unsync 变更检测**: Copy 模式复制的文件和目录如果已修改则保留
-- **Status 变更检测**: 复制的文件与源文件不同时显示 `MODIFIED`
+- **Overlay 复制安全性**: 目录 copy 模式会保留无关的 target 文件，仅替换文件/符号链接冲突，并在文件与目录冲突时安全失败
+- **Unsync 变更检测**: `unsync` 只移除复制的 source 子集，并保留已修改或无关的内容
+- **Status 变更检测**: 当复制的 source 条目与 target 不一致时显示 `MODIFIED`
 - **幂等性保证**: 多次运行 `sync` 始终产生相同结果
 
 ## 📄 许可证
