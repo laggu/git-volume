@@ -17,8 +17,11 @@
 
 ### Homebrew
 ```bash
-brew install laggu/tap/git-volume
+brew tap laggu/tap
+brew install git-volume
 ```
+
+Homebrew 安装以 **formula** 形式发布，会在用户机器上从源码构建 `git-volume`。这样可以避免依赖未签名的 macOS 预编译二进制文件，但 Homebrew 会安装 Go 作为构建依赖。
 
 ### Scoop (Windows)
 ```bash

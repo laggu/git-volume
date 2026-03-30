@@ -17,8 +17,11 @@
 
 ### Homebrew
 ```bash
-brew install laggu/tap/git-volume
+brew tap laggu/tap
+brew install git-volume
 ```
+
+La instalación con Homebrew se distribuye como **formula** y compila `git-volume` desde el código fuente en la máquina del usuario. Esto evita depender de binarios precompilados de macOS sin firmar, pero significa que Homebrew instalará Go como dependencia de compilación.
 
 ### Scoop (Windows)
 ```bash

@@ -17,8 +17,11 @@
 
 ### Homebrew
 ```bash
-brew install laggu/tap/git-volume
+brew tap laggu/tap
+brew install git-volume
 ```
+
+Homebrew 설치는 **formula** 방식으로 배포되며, `git-volume`을 사용자 컴퓨터에서 소스 빌드합니다. 이 방식은 unsigned macOS 사전 빌드 바이너리에 의존하지 않지만, Homebrew가 빌드 의존성으로 Go를 설치하게 됩니다.
 
 ### Scoop (Windows)
 ```bash
