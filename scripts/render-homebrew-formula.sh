@@ -19,12 +19,10 @@ class GitVolume < Formula
   depends_on "go" => :build
 
   def install
-    ldflags = [
-      "-s", "-w",
-      "-X", "github.com/laggu/git-volume/cmd.version=#{version}",
-    ]
+    ENV["CGO_ENABLED"] = "0"
+    ldflags = "-s -w -X github.com/laggu/git-volume/cmd.version=#{version}"
 
-    system "go", "build", *std_go_args(ldflags: ldflags), "./main.go"
+    system "go", "build", *std_go_args(ldflags: ldflags)
   end
 
   test do
