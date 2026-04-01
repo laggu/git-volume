@@ -3,6 +3,7 @@
 set -euo pipefail
 
 VERSION="${1:?version is required}"
+VERSION="${VERSION#v}"
 SHA256="${2:?sha256 is required}"
 OUTPUT="${3:?output path is required}"
 
@@ -12,14 +13,13 @@ cat >"$OUTPUT" <<EOF
 class GitVolume < Formula
   desc "Manage environment files across Git worktrees"
   homepage "https://github.com/laggu/git-volume"
-  url "https://github.com/laggu/git-volume/archive/refs/tags/v${VERSION}.tar.gz"
+  url "https://github.com/laggu/git-volume/archive/v${VERSION}.tar.gz"
   sha256 "${SHA256}"
   license "GPL-3.0-only"
 
   depends_on "go" => :build
 
   def install
-    ENV["CGO_ENABLED"] = "0"
     ldflags = "-s -w -X github.com/laggu/git-volume/cmd.version=#{version}"
 
     system "go", "build", *std_go_args(ldflags: ldflags)
