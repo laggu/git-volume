@@ -17,8 +17,7 @@
 
 ### Homebrew
 ```bash
-brew tap laggu/tap
-brew install git-volume
+brew install laggu/tap/git-volume
 ```
 
 Homebrew installation is distributed as a **formula** and builds `git-volume` from source on your machine. This avoids depending on unsigned prebuilt macOS binaries, but it means Homebrew will install Go as a build dependency.

@@ -13,7 +13,7 @@ cat >"$OUTPUT" <<EOF
 class GitVolume < Formula
   desc "Manage environment files across Git worktrees"
   homepage "https://github.com/laggu/git-volume"
-  url "https://github.com/laggu/git-volume/archive/v${VERSION}.tar.gz"
+  url "https://github.com/laggu/git-volume/archive/refs/tags/v${VERSION}.tar.gz"
   sha256 "${SHA256}"
   license "GPL-3.0-only"
 
