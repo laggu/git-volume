@@ -84,18 +84,6 @@ release:
   mode: replace
   name_template: "v{{ .Version }}"
 
-homebrew_casks:
-  - name: git-volume
-    repository:
-      owner: laggu
-      name: homebrew-tap
-      token: "{{ .Env.RELEASE_TOKEN }}"
-    directory: Casks
-    homepage: "https://github.com/laggu/git-volume"
-    description: "Manage environment files across Git worktrees"
-    license: "MIT"
-    skip_upload: auto
-
 scoops:
   - repository:
       owner: laggu
@@ -103,5 +91,5 @@ scoops:
       token: "{{ .Env.RELEASE_TOKEN }}"
     homepage: "https://github.com/laggu/git-volume"
     description: "Manage environment files across Git worktrees"
-    license: MIT
+    license: GPL-3.0-only
     skip_upload: auto

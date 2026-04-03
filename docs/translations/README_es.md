@@ -20,6 +20,8 @@
 brew install laggu/tap/git-volume
 ```
 
+La instalación con Homebrew se distribuye como **formula** y compila `git-volume` desde el código fuente en la máquina del usuario. Esto evita depender de binarios precompilados de macOS sin firmar, pero significa que Homebrew instalará Go como dependencia de compilación.
+
 ### Scoop (Windows)
 ```bash
 scoop bucket add laggu https://github.com/laggu/scoop-bucket.git

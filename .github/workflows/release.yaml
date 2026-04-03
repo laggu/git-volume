@@ -31,3 +31,71 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  update-homebrew-formula:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v6
+
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tarball_url=https://github.com/laggu/git-volume/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Download source tarball
+        run: |
+          curl -fsSL "${{ steps.meta.outputs.tarball_url }}" -o git-volume.tar.gz
+
+      - name: Compute source checksum
+        id: checksum
+        run: |
+          echo "sha256=$(sha256sum git-volume.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v6
+        with:
+          repository: laggu/homebrew-tap
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: homebrew-tap
+
+      - name: Render Homebrew formula
+        run: |
+          chmod +x scripts/render-homebrew-formula.sh
+          scripts/render-homebrew-formula.sh \
+            "${{ steps.meta.outputs.version }}" \
+            "${{ steps.checksum.outputs.sha256 }}" \
+            "homebrew-tap/Formula/git-volume.rb"
+          rm -f homebrew-tap/Casks/.gitkeep
+
+      - name: Create formula update PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: homebrew-tap
+          branch: update-git-volume-${{ steps.meta.outputs.version }}
+          delete-branch: true
+          base: main
+          commit-message: |
+            Update git-volume formula to ${{ steps.meta.outputs.tag }}
+
+            Source-Tag: ${{ steps.meta.outputs.tag }}
+            Source-SHA256: ${{ steps.checksum.outputs.sha256 }}
+          title: Update git-volume formula to ${{ steps.meta.outputs.tag }}
+          body: |
+            ## Summary
+            - update `Formula/git-volume.rb` to `${{ steps.meta.outputs.tag }}`
+            - refresh the source tarball SHA256
+            - keep Homebrew distribution on the source-build formula path
+
+            ## Notes
+            - generated from the release workflow in `laggu/git-volume`
+            - source tarball: `${{ steps.meta.outputs.tarball_url }}`
+          add-paths: |
+            Formula/git-volume.rb
+            Casks/.gitkeep
