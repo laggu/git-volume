@@ -5,7 +5,9 @@ set -euo pipefail
 VERSION="${1:?version is required}"
 VERSION="${VERSION#v}"
 SHA256="${2:?sha256 is required}"
-OUTPUT="${3:?output path is required}"
+COMMIT="${3:?commit is required}"
+DATE="${4:?date is required}"
+OUTPUT="${5:?output path is required}"
 
 mkdir -p "$(dirname "$OUTPUT")"
 
@@ -20,13 +22,22 @@ class GitVolume < Formula
   depends_on "go" => :build
 
   def install
-    ldflags = "-s -w -X github.com/laggu/git-volume/cmd.version=#{version}"
+    ldflags = [
+      "-s -w",
+      "-X github.com/laggu/git-volume/cmd.version=#{version}",
+      "-X github.com/laggu/git-volume/cmd.commit=${COMMIT}",
+      "-X github.com/laggu/git-volume/cmd.date=${DATE}",
+    ].join(" ")
 
     system "go", "build", *std_go_args(ldflags: ldflags)
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/git-volume version")
+    output = shell_output("#{bin}/git-volume version")
+
+    assert_match version.to_s, output
+    assert_match "commit: ${COMMIT}", output
+    assert_match "built:  ${DATE}", output
   end
 end
 EOF

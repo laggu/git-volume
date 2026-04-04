@@ -46,6 +46,8 @@ jobs:
         run: |
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
           echo "tarball_url=https://github.com/laggu/git-volume/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" >> "$GITHUB_OUTPUT"
 
       - name: Download source tarball
@@ -70,6 +72,8 @@ jobs:
           scripts/render-homebrew-formula.sh \
             "${{ steps.meta.outputs.version }}" \
             "${{ steps.checksum.outputs.sha256 }}" \
+            "${{ steps.meta.outputs.commit }}" \
+            "${{ steps.meta.outputs.date }}" \
             "homebrew-tap/Formula/git-volume.rb"
           rm -f homebrew-tap/Casks/.gitkeep
 
