@@ -98,4 +98,3 @@ jobs:
             - source tarball: `${{ steps.meta.outputs.tarball_url }}`
           add-paths: |
             Formula/git-volume.rb
-            Casks/.gitkeep
