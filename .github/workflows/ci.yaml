@@ -66,6 +66,9 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - name: Verify Homebrew formula renderer
+        run: bash test/render_homebrew_formula.sh
+
       - name: Verify GoReleaser config
         uses: goreleaser/goreleaser-action@v6
         with:
