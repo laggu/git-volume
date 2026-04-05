@@ -27,5 +27,5 @@ grep -F 'sha256 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde
 grep -F -- '-X github.com/laggu/git-volume/cmd.version=#{version}' "${OUTPUT_FILE}"
 grep -F -- "-X github.com/laggu/git-volume/cmd.commit=${COMMIT}" "${OUTPUT_FILE}"
 grep -F -- "-X github.com/laggu/git-volume/cmd.date=${DATE}" "${OUTPUT_FILE}"
-grep -F "assert_match \"commit: ${COMMIT}\", output" "${OUTPUT_FILE}"
-grep -F "assert_match \"built:  ${DATE}\", output" "${OUTPUT_FILE}"
+grep -F "assert_includes output, \"commit: ${COMMIT}\"" "${OUTPUT_FILE}"
+grep -F "assert_includes output, \"built:  ${DATE}\"" "${OUTPUT_FILE}"

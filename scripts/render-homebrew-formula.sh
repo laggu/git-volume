@@ -35,9 +35,9 @@ class GitVolume < Formula
   test do
     output = shell_output("#{bin}/git-volume version")
 
-    assert_match version.to_s, output
-    assert_match "commit: ${COMMIT}", output
-    assert_match "built:  ${DATE}", output
+    assert_includes output, version.to_s
+    assert_includes output, "commit: ${COMMIT}"
+    assert_includes output, "built:  ${DATE}"
   end
 end
 EOF
